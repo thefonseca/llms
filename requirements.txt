@@ -1,0 +1,16 @@
+datasets==2.10.1
+fire==0.5.0
+p_tqdm==1.4.0
+rouge_score==0.1.2
+torch==2.0.0
+transformers==4.27.1
+rich==13.3.2
+scipy==1.10.1
+diskcache==5.4.0
+openai==0.27.2
+tiktoken==0.3.1
+cohere==4.0.2
+accelerate==0.17.1
+sentencepiece==0.1.97
+bitsandbytes==0.37.1
+protobuf==3.20.0
