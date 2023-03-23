@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 def summarizer_for_model(model_name, dataset_name=None):
     summarizer_map = {
-        "gpt-3.5-turbo[-\d\w]*": OpenAISummarizer,
+        "gpt-[-\d\w]*": OpenAISummarizer,
         "facebook/opt-[\d\w]+": CausalLMSummarizer,
         "summarize-[\d\w]+": CohereSummarizer,
         ".*llama.*": CausalLMSummarizer,
@@ -30,7 +30,12 @@ def summarizer_for_model(model_name, dataset_name=None):
 
 
 def predict_summaries(
-    model_name_or_path, sources, dataset_name=None, max_length=256, cache_start=0, cache_end=None
+    model_name_or_path,
+    sources,
+    dataset_name=None,
+    max_length=256,
+    cache_start=0,
+    cache_end=None,
 ):
     summaries = []
     progress = get_progress_bar()

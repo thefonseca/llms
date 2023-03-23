@@ -28,7 +28,7 @@ class OpenAISummarizer(InstructTunedSummarizer):
         """Returns the number of tokens used by a list of messages."""
 
         # note: future models may deviate from this
-        if "gpt-3.5-turbo" in self.model_name:
+        if "gpt-" in self.model_name:
             num_tokens = 0
             for message in messages:
                 # every message follows <im_start>{role/name}\n{content}<im_end>\n
@@ -65,7 +65,9 @@ class OpenAISummarizer(InstructTunedSummarizer):
         prompt, generation_kwargs = super().preprocess(
             text, truncation=truncation, **generation_kwargs
         )
-        max_tokens = generation_kwargs.pop("max_length", self.default_max_tokens(self.model_name))
+        max_tokens = generation_kwargs.pop(
+            "max_length", self.default_max_tokens(self.model_name)
+        )
         generation_kwargs["max_tokens"] = max_tokens
         return prompt, generation_kwargs
 
