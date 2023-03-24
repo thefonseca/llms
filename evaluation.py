@@ -14,6 +14,7 @@ from .inference import predict_summaries
 from .metrics import summarization_metrics
 from .utils import (
     aggregate_scores,
+    compute_metric,
     config_logging,
     get_output_path,
     log_scores,
@@ -206,10 +207,10 @@ def evaluate(
         scores_filename = filepath.parent / scores_filename
         scores_df.to_csv(scores_filename, index=False)
 
-        results_filename = f"{filepath.stem}_metrics.txt"
+        results_filename = f"{filepath.stem}_metrics.json"
         results_filename = filepath.parent / results_filename
         with open(results_filename, "w") as file:
-            file.write(json.dumps(results["scores"], indent=2))
+            json.dump(results["scores"], file, indent=2)
 
     return results["scores"]
 
@@ -227,6 +228,7 @@ def evaluate_model(
     cache_start=0,
     cache_end=None,
     cache_dir=None,
+    metrics=None,
     seed=17,
 ):
     timestr = config_logging(dataset_name, split, output_dir)
@@ -273,6 +275,19 @@ def evaluate_model(
                 cache_end=cache_end,
             )
 
+        scores = None
+        if metrics:
+            scores = {}
+            for metric_name, metric in metrics.items():
+                metric_kwargs = metric.get("metric_kwargs", {})
+                metric_scores = compute_metric(
+                    targets,
+                    preds,
+                    metric["metric_fn"],
+                    **metric_kwargs,
+                )
+                scores[metric_name] = metric_scores
+
         save_to = get_output_path(
             output_dir,
             dataset_name,
@@ -283,6 +298,7 @@ def evaluate_model(
         evaluate(
             preds,
             targets,
+            scores=scores,
             save_preds_to=save_to,
             seed=seed,
         )

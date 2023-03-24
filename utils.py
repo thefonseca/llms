@@ -145,7 +145,9 @@ def compute_metric(references, candidates, metric_fn, progress=None, **metric_kw
     )
     with progress:
         for ref, cand in zip(references, candidates):
-            results.append(metric_fn([cand], references=[ref], **metric_kwargs))
+            results.append(
+                metric_fn(references=[ref], candidates=[cand], **metric_kwargs)
+            )
             progress.update(task, advance=1)
     return results
 
