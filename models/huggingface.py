@@ -1,4 +1,3 @@
-from functools import lru_cache
 import logging
 
 import torch
@@ -32,7 +31,10 @@ class HFSummarizer(Summarizer):
         self.device_map = device_map
         self.low_cpu_mem_usage = low_cpu_mem_usage
         self.load_in_8bit = load_in_8bit
-    
+        self.tokenizer = None
+        self.model = None
+        self.generation_config = None
+
     def get_model_kwargs(self):
         return dict(
             cache_dir=self.cache_dir,
@@ -44,16 +46,28 @@ class HFSummarizer(Summarizer):
     def get_tokenizer_kwargs(self):
         return dict(cache_dir=self.cache_dir)
 
-    @staticmethod
-    @lru_cache(maxsize=1)
-    def load_tokenizer(model_name_or_path, cache_dir=None, **kwargs):
+    def load_tokenizer(self, model_name_or_path, cache_dir=None, **kwargs):
+        if self.tokenizer:
+            return self.tokenizer
+
         logger.info(f"Loading tokenizer {model_name_or_path}...")
-        if "google/pegasus-x-base" in model_name_or_path:
+        if "google/pegasus-x-bgeneration_conase" in model_name_or_path:
             model_name_or_path = "google/pegasus-x-base"
         tokenizer = AutoTokenizer.from_pretrained(
             model_name_or_path, cache_dir=cache_dir, **kwargs
         )
+        self.tokenizer = tokenizer
         return tokenizer
+
+    def load_generation_config(self, model_name_or_path, cache_dir=None, **kwargs):
+        if self.generation_config:
+            return self.generation_config
+
+        generation_config = GenerationConfig.from_pretrained(
+            model_name_or_path, cache_dir, **kwargs
+        )
+        self.generation_config = generation_config
+        return generation_config
 
     @staticmethod
     def default_max_tokens(model_name):
@@ -69,7 +83,7 @@ class HFSummarizer(Summarizer):
         else:
             max_tokens = 1024
         return max_tokens
-    
+
     @memoize()
     def generate_cached(
         self,
@@ -94,7 +108,7 @@ class HFSummarizer(Summarizer):
             load_in_8bit=load_in_8bit,
         )
         tokenizer = self.load_tokenizer(model_name_or_path, cache_dir=cache_dir)
-        generation_config = GenerationConfig.from_pretrained(
+        generation_config = self.load_generation_config(
             model_name_or_path, cache_dir=cache_dir
         )
 
@@ -119,10 +133,12 @@ class HFSummarizer(Summarizer):
                 **generation_kwargs,
             )
             summary = tokenizer.batch_decode(
-                generated_ids.cpu(), skip_special_tokens=True, clean_up_tokenization_spaces=False
+                generated_ids.cpu(),
+                skip_special_tokens=True,
+                clean_up_tokenization_spaces=False,
             )[0]
             if isinstance(model_input, str) and keep_generated_only:
-                summary = summary[len(model_input):]
+                summary = summary[len(model_input) :]
             return summary
 
 
@@ -130,15 +146,17 @@ class Text2TextSummarizer(HFSummarizer):
     def __init__(self, model_name_or_path, **kwargs) -> None:
         super().__init__(model_name_or_path, **kwargs)
 
-    @lru_cache(maxsize=1)
     def load_model(
         self,
-        model_name_or_path, 
-        cache_dir=None, 
-        device_map="auto", 
-        low_cpu_mem_usage=True, 
-        load_in_8bit=False, 
-        **kwargs):
+        model_name_or_path,
+        cache_dir=None,
+        device_map="auto",
+        low_cpu_mem_usage=True,
+        load_in_8bit=False,
+        **kwargs,
+    ):
+        if self.model:
+            return self.model
 
         logger.info(f"Loading model {model_name_or_path}...")
         dtype = torch.int8 if load_in_8bit else "auto"
@@ -174,6 +192,7 @@ class Text2TextSummarizer(HFSummarizer):
                 "Make sure that `config.decoder_start_token_id` is correctly defined"
             )
         model.eval()
+        self.model = model
         return model
 
     def truncate_input(self, input, max_tokens, **kwargs):
@@ -188,13 +207,18 @@ class Text2TextSummarizer(HFSummarizer):
         return input
 
     def preprocess(
-        self, text, truncation=True, max_length=None, do_sample=None, **generation_kwargs
+        self,
+        text,
+        truncation=True,
+        max_length=None,
+        do_sample=None,
+        **generation_kwargs,
     ):
         model_input, generation_kwargs = super().preprocess(
             text, truncation=truncation, **generation_kwargs
         )
         if max_length is None:
-            generation_config = GenerationConfig.from_pretrained(
+            generation_config = self.load_generation_config(
                 self.model_name, self.cache_dir
             )
             max_length = generation_config.max_length
@@ -217,7 +241,6 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
     def __init__(self, model_name_or_path, **kwargs) -> None:
         super().__init__(model_name_or_path, **kwargs)
 
-    @lru_cache(maxsize=1)
     def load_model(
         self,
         model_name_or_path,
@@ -227,6 +250,9 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         load_in_8bit=False,
         **kwargs,
     ):
+        if self.model:
+            return self.model
+
         logger.info(f"Loading model {model_name_or_path}...")
         dtype = torch.int8 if load_in_8bit else "auto"
         model = AutoModelForCausalLM.from_pretrained(
@@ -238,6 +264,7 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
             torch_dtype=dtype,
             **kwargs,
         )
+        self.model = model
         return model
 
     def preprocess(self, text, truncation=True, max_length=None, **generation_kwargs):

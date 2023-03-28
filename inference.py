@@ -10,7 +10,7 @@ from .utils import get_progress_bar, add_progress_task
 logger = logging.getLogger(__name__)
 
 
-def summarizer_for_model(model_name, dataset_name=None):
+def summarizer_for_model(model_name, **kwargs):
     summarizer_map = {
         "gpt-[-\d\w]*": OpenAISummarizer,
         "facebook/opt-[\d\w]+": CausalLMSummarizer,
@@ -25,17 +25,17 @@ def summarizer_for_model(model_name, dataset_name=None):
     else:
         summarizer_class = Text2TextSummarizer
 
-    summarizer = summarizer_class(model_name, dataset_name=dataset_name)
+    summarizer = summarizer_class(model_name, **kwargs)
     return summarizer
 
 
 def predict_summaries(
     model_name_or_path,
     sources,
-    dataset_name=None,
     max_length=256,
     cache_start=0,
     cache_end=None,
+    **model_kwargs,
 ):
     summaries = []
     progress = get_progress_bar()
@@ -46,7 +46,7 @@ def predict_summaries(
         existing_ok=False,
     )
     cache_end = cache_end if cache_end is not None else len(sources)
-    summarizer = summarizer_for_model(model_name_or_path, dataset_name=dataset_name)
+    summarizer = summarizer_for_model(model_name_or_path, **model_kwargs)
 
     if hasattr(summarizer, "num_tokens_for_texts"):
         n_tokens = summarizer.num_tokens_for_texts(sources, max_length=max_length)

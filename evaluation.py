@@ -273,6 +273,7 @@ def evaluate_model(
                 dataset_name=dataset_name,
                 cache_start=cache_start,
                 cache_end=cache_end,
+                cache_dir=cache_dir,
             )
 
         scores = None
