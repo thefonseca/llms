@@ -276,6 +276,17 @@ def evaluate_model(
                 cache_dir=cache_dir,
             )
 
+        def is_valid_pred(pred):
+            return pred and str(pred) != "nan"
+
+        valid_pred_idxs = [idx for idx, pred in enumerate(preds) if is_valid_pred(pred)]
+        if len(valid_pred_idxs) < len(preds):
+            logger.warning(
+                f"Found {len(preds) - len(valid_pred_idxs)} predictions with no content"
+            )
+            preds = [preds[idx] for idx in valid_pred_idxs]
+            targets = [targets[idx] for idx in valid_pred_idxs]
+
         scores = None
         if metrics:
             scores = {}
