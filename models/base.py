@@ -12,6 +12,9 @@ class Summarizer:
         self.model_name = model_name
         self.dataset_name = dataset_name
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}:\n{self.__dict__}"
+
     def load_tokenizer(model_name_or_path, **model_kwargs):
         raise NotImplementedError("Method load_tokenizer not implemented.")
 

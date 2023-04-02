@@ -2,7 +2,7 @@ import logging
 import re
 import time
 
-from .models.huggingface import Text2TextSummarizer, CausalLMSummarizer
+from .models.huggingface import Text2TextSummarizer, CausalLMSummarizer, T5Summarizer
 from .models.openai import OpenAISummarizer
 from .models.cohere import CohereSummarizer
 from .utils import get_progress_bar, add_progress_task
@@ -14,8 +14,10 @@ def summarizer_for_model(model_name, **kwargs):
     summarizer_map = {
         "gpt-[-\d\w]*": OpenAISummarizer,
         "facebook/opt-[\d\w]+": CausalLMSummarizer,
-        "summarize-[\d\w]+": CohereSummarizer,
+        "bigscience/T0[_\d\w]*": T5Summarizer,
+        "google/flan-t5[-\d\w]+": T5Summarizer,
         ".*llama.*": CausalLMSummarizer,
+        "summarize-[\d\w]+": CohereSummarizer,
     }
 
     for key, val in summarizer_map.items():
@@ -26,6 +28,7 @@ def summarizer_for_model(model_name, **kwargs):
         summarizer_class = Text2TextSummarizer
 
     summarizer = summarizer_class(model_name, **kwargs)
+    logger.info(f"Using summarizer {summarizer}")
     return summarizer
 
 

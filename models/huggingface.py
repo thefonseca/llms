@@ -10,7 +10,7 @@ from transformers import (
     LlamaForCausalLM,
 )
 
-from .base import Summarizer, PromptBasedSummarizer
+from .base import Summarizer, PromptBasedSummarizer, InstructTunedSummarizer
 from ..memoizer import memoize
 
 logger = logging.getLogger(__name__)
@@ -60,14 +60,20 @@ class HFSummarizer(Summarizer):
         return tokenizer
 
     def load_generation_config(self, model_name_or_path, cache_dir=None, **kwargs):
-        if self.generation_config:
+        if self.generation_config is not None:
             return self.generation_config
 
-        generation_config = GenerationConfig.from_pretrained(
-            model_name_or_path, cache_dir, **kwargs
-        )
-        self.generation_config = generation_config
-        return generation_config
+        try:
+            generation_config = GenerationConfig.from_pretrained(
+                model_name_or_path, cache_dir, **kwargs
+            )
+            self.generation_config = generation_config
+        except OSError:
+            logger.warning(
+                f"{model_name_or_path} does not appear to have a file named generation_config.json"
+            )
+            self.generation_config = GenerationConfig()
+        return self.generation_config
 
     @staticmethod
     def default_max_tokens(model_name):
@@ -80,6 +86,8 @@ class HFSummarizer(Summarizer):
             max_tokens = config.max_encoder_position_embeddings
         elif hasattr(config, "max_sequence_length"):
             max_tokens = config.max_sequence_length
+        elif hasattr(config, "n_positions"):
+            max_tokens = config.n_positions
         else:
             max_tokens = 1024
         return max_tokens
@@ -221,10 +229,23 @@ class Text2TextSummarizer(HFSummarizer):
             generation_config = self.load_generation_config(
                 self.model_name, self.cache_dir
             )
-            max_length = generation_config.max_length
+            if hasattr("max_length", generation_config):
+                max_length = generation_config.max_length
         generation_kwargs["max_new_tokens"] = max_length
         if do_sample is None:
             generation_kwargs["do_sample"] = False
+
+        config = AutoConfig.from_pretrained(self.model_name, cache_dir=self.cache_dir)
+        if hasattr(config, "task_specific_params"):
+            task_params = config.task_specific_params
+            if task_params and "summarization" in task_params:
+                for key, param in task_params["summarization"].items():
+                    if (
+                        key not in ["prefix", "max_length"]
+                        and key not in generation_kwargs
+                    ):
+                        generation_kwargs[key] = param
+
         return model_input, generation_kwargs
 
     def postprocess(self, summary):
@@ -281,3 +302,13 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         generation_kwargs["keep_generated_only"] = True
         prompt_text = "\n".join([m["content"] for m in prompt])
         return prompt_text, generation_kwargs
+
+
+class T5Summarizer(InstructTunedSummarizer, Text2TextSummarizer):
+    def __init__(self, model_name_or_path, **kwargs) -> None:
+        super().__init__(model_name_or_path, **kwargs)
+
+    def truncate_input(self, prompt, max_tokens, **kwargs):
+        prompt = super().truncate_input(prompt, max_tokens, **kwargs)
+        prompt_text = "\n".join([m["content"] for m in prompt])
+        return prompt_text
