@@ -230,6 +230,7 @@ def evaluate_model(
     cache_dir=None,
     metrics=None,
     seed=17,
+    **kwargs,
 ):
     timestr = config_logging(dataset_name, split, output_dir)
     eval_data = datasets.load_dataset(dataset_path, dataset_name, cache_dir=cache_dir)
@@ -270,10 +271,10 @@ def evaluate_model(
             preds = predict_summaries(
                 model_name,
                 sources,
-                dataset_name=dataset_name,
                 cache_start=cache_start,
                 cache_end=cache_end,
                 cache_dir=cache_dir,
+                **kwargs,
             )
 
         def is_valid_pred(pred):

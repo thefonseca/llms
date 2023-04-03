@@ -1,24 +1,24 @@
 import logging
+from pprint import pformat
 
 import numpy as np
 
-from ..utils import sent_tokenize, get_progress_bar, add_progress_task
+from ..utils import sent_tokenize, get_progress_bar, add_progress_task, log
 
 logger = logging.getLogger(__name__)
 
 
 class Summarizer:
-    def __init__(self, model_name, dataset_name=None) -> None:
+    def __init__(self, model_name) -> None:
         self.model_name = model_name
-        self.dataset_name = dataset_name
-
+        
     def __repr__(self):
-        return f"{self.__class__.__name__}:\n{self.__dict__}"
+        return f"{self.__class__.__name__}:\n{pformat(self.__dict__)}"
 
     def load_tokenizer(model_name_or_path, **model_kwargs):
         raise NotImplementedError("Method load_tokenizer not implemented.")
 
-    def default_max_tokens(self, model_name):
+    def default_max_tokens(self):
         """Return the maximum supported sequence length in tokens."""
         raise NotImplementedError("Function default_max_tokens not implemented.")
 
@@ -54,17 +54,19 @@ class Summarizer:
     def build_input(self, text, **kwargs):
         return text
 
-    def preprocess(self, text, truncation=True, **kwargs):
+    def preprocess(self, text, truncation=True, verbose=False, **generation_kwargs):
         if isinstance(text, list):
             text = "\n".join(text)
-        model_input = self.build_input(text, **kwargs)
+        model_input = self.build_input(text, verbose=verbose, **generation_kwargs)
 
         if truncation:
-            max_tokens = kwargs.get(
-                "max_tokens", self.default_max_tokens(self.model_name)
+            max_tokens = generation_kwargs.get(
+                "max_tokens", self.default_max_tokens()
             )
+            log(logger, f"Truncating input to {max_tokens} max tokens", verbose=verbose)
             model_input = self.truncate_input(model_input, max_tokens)
-        return model_input, kwargs
+
+        return model_input, generation_kwargs
 
     def postprocess(self, summary):
         # rougeLSum expects newline after each sentence
@@ -75,16 +77,21 @@ class Summarizer:
         self,
         text,
         truncation=True,
+        verbose=False,
         **generation_kwargs,
     ):
         model_input, generation_kwargs = self.preprocess(
-            text, truncation=truncation, **generation_kwargs
+            text, truncation=truncation, verbose=verbose, **generation_kwargs
         )
         model_kwargs = self.get_model_kwargs()
         kwargs = model_kwargs.copy()
+        log(logger, f"Model kwargs:\n{pformat(kwargs)}", verbose=verbose)
+        log(logger, f"Generation kwargs:\n{pformat(generation_kwargs)}", verbose=verbose)
         kwargs.update(generation_kwargs)
+        log(logger, f"Model input: {model_input}", verbose=verbose)
         summary = self.generate_cached(self.model_name, model_input, **kwargs)
         summary = self.postprocess(summary)
+        log(logger, f"Summary:\n{summary}", verbose=verbose)
         return summary
 
     def is_last_result_from_cache(self):
@@ -147,6 +154,7 @@ class PromptBasedSummarizer(Summarizer):
         article_prompt=None,
         task_prompt=None,
         num_sentences=6,
+        verbose=False,
         **generation_kwargs,
     ):
         if article_prompt is None:
@@ -157,7 +165,6 @@ class PromptBasedSummarizer(Summarizer):
             system_prompt = self.system_prompt
 
         article_prompt = article_prompt.format(text)
-
         prompt = []
         if system_prompt:
             prompt.append({"role": "system", "content": system_prompt})
@@ -166,6 +173,9 @@ class PromptBasedSummarizer(Summarizer):
             task_prompt = task_prompt.format(num_sentences)
             prompt.append({"role": "user", "content": task_prompt})
 
+        log(logger, f"System prompt: {system_prompt}", verbose=verbose)
+        log(logger, f"Article prompt: {article_prompt}", verbose=verbose)
+        log(logger, f"Task prompt: {task_prompt}", verbose=verbose)
         return prompt
 
     def num_tokens_for_prompt(self, messages):
@@ -204,6 +214,9 @@ class PromptBasedSummarizer(Summarizer):
                 num_tokens += self.num_tokens_for_prompt(prompt)
                 progress.update(task, advance=1)
         return num_tokens
+    
+    def prompt_to_text(self, prompt):
+        return "\n".join([m["content"] for m in prompt])
 
 
 class InstructTunedSummarizer(PromptBasedSummarizer):
@@ -211,7 +224,4 @@ class InstructTunedSummarizer(PromptBasedSummarizer):
         super().__init__(model_name_or_path, **kwargs)
 
     def default_task_prompt(self):
-        if self.dataset_name in ["arxiv", "pubmed"]:
-            return "Write an abstract for the article above with {} sentences."
-        else:
-            return "Summarize the article above in {} sentences"
+        return "Summarize the article above in {} sentences"

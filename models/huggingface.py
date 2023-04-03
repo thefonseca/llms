@@ -24,6 +24,7 @@ class HFSummarizer(Summarizer):
         device_map="auto",
         low_cpu_mem_usage=True,
         load_in_8bit=False,
+        dtype="auto",
         **kwargs,
     ):
         super().__init__(model_name_or_path, **kwargs)
@@ -31,9 +32,33 @@ class HFSummarizer(Summarizer):
         self.device_map = device_map
         self.low_cpu_mem_usage = low_cpu_mem_usage
         self.load_in_8bit = load_in_8bit
+        self.dtype = dtype
         self.tokenizer = None
         self.model = None
+        self.model_config = None
         self.generation_config = None
+
+    @property
+    def dtype(self):
+        return self._dtype
+    
+    @dtype.setter
+    def dtype(self, value):
+        if value == "fp16":
+            dtype = torch.float16
+        elif value == "fp32":
+            dtype = torch.float32
+        elif value == "fp64":
+            dtype = torch.float64
+        elif value == "bf16":
+            dtype = torch.bfloat16
+        elif value == "auto":
+            dtype = "auto"
+        else:
+            logger.warning(f"Unsupported dtype {value}. Setting dtype = 'auto'.")
+            dtype = "auto"
+        self._dtype = dtype
+        
 
     def get_model_kwargs(self):
         return dict(
@@ -41,31 +66,48 @@ class HFSummarizer(Summarizer):
             device_map=self.device_map,
             low_cpu_mem_usage=self.low_cpu_mem_usage,
             load_in_8bit=self.load_in_8bit,
+            dtype=self.dtype,
         )
 
     def get_tokenizer_kwargs(self):
         return dict(cache_dir=self.cache_dir)
 
-    def load_tokenizer(self, model_name_or_path, cache_dir=None, **kwargs):
+    def load_tokenizer(self, model_name_or_path, **kwargs):
         if self.tokenizer:
             return self.tokenizer
 
         logger.info(f"Loading tokenizer {model_name_or_path}...")
-        if "google/pegasus-x-bgeneration_conase" in model_name_or_path:
+        if "google/pegasus-x-base" in model_name_or_path:
             model_name_or_path = "google/pegasus-x-base"
         tokenizer = AutoTokenizer.from_pretrained(
-            model_name_or_path, cache_dir=cache_dir, **kwargs
+            model_name_or_path, **kwargs
         )
         self.tokenizer = tokenizer
         return tokenizer
 
-    def load_generation_config(self, model_name_or_path, cache_dir=None, **kwargs):
+    def load_model_config(self, model_name_or_path, **kwargs):
+        if self.model_config is not None:
+            return self.model_config
+
+        try:
+            model_config = AutoConfig.from_pretrained(
+                model_name_or_path, **kwargs
+            )
+            self.model_config = model_config
+        except OSError:
+            logger.warning(
+                f"{model_name_or_path} does not appear to have a file named config.json"
+            )
+            self.model_config = AutoConfig()
+        return self.model_config
+    
+    def load_generation_config(self, model_name_or_path, **kwargs):
         if self.generation_config is not None:
             return self.generation_config
 
         try:
             generation_config = GenerationConfig.from_pretrained(
-                model_name_or_path, cache_dir, **kwargs
+                model_name_or_path, **kwargs
             )
             self.generation_config = generation_config
         except OSError:
@@ -75,10 +117,9 @@ class HFSummarizer(Summarizer):
             self.generation_config = GenerationConfig()
         return self.generation_config
 
-    @staticmethod
-    def default_max_tokens(model_name):
-        config = AutoConfig.from_pretrained(model_name)
-        if "google/bigbird-pegasus-large" in model_name:
+    def default_max_tokens(self):
+        config = self.load_model_config(self.model_name, cache_dir=self.cache_dir)
+        if "google/bigbird-pegasus-large" in self.model_name:
             max_tokens = 3072
         elif hasattr(config, "max_position_embeddings"):
             max_tokens = config.max_position_embeddings
@@ -90,6 +131,7 @@ class HFSummarizer(Summarizer):
             max_tokens = config.n_positions
         else:
             max_tokens = 1024
+    
         return max_tokens
 
     @memoize()
@@ -101,6 +143,7 @@ class HFSummarizer(Summarizer):
         device_map="auto",
         low_cpu_mem_usage=True,
         load_in_8bit=False,
+        dtype="auto",
         do_sample=True,
         temperature=0.8,
         top_p=0.95,
@@ -114,6 +157,7 @@ class HFSummarizer(Summarizer):
             device_map=device_map,
             low_cpu_mem_usage=low_cpu_mem_usage,
             load_in_8bit=load_in_8bit,
+            dtype=dtype,
         )
         tokenizer = self.load_tokenizer(model_name_or_path, cache_dir=cache_dir)
         generation_config = self.load_generation_config(
@@ -161,13 +205,15 @@ class Text2TextSummarizer(HFSummarizer):
         device_map="auto",
         low_cpu_mem_usage=True,
         load_in_8bit=False,
+        dtype="auto",
         **kwargs,
     ):
         if self.model:
             return self.model
 
         logger.info(f"Loading model {model_name_or_path}...")
-        dtype = torch.int8 if load_in_8bit else "auto"
+        if load_in_8bit:
+            dtype = torch.int8
         if any(
             [x in self.model_name] for x in ["google/pegasus", "google/bigbird-pegasus"]
         ):
@@ -231,11 +277,12 @@ class Text2TextSummarizer(HFSummarizer):
             )
             if hasattr("max_length", generation_config):
                 max_length = generation_config.max_length
+
         generation_kwargs["max_new_tokens"] = max_length
         if do_sample is None:
             generation_kwargs["do_sample"] = False
 
-        config = AutoConfig.from_pretrained(self.model_name, cache_dir=self.cache_dir)
+        config = self.load_model_config(self.model_name, cache_dir=self.cache_dir)
         if hasattr(config, "task_specific_params"):
             task_params = config.task_specific_params
             if task_params and "summarization" in task_params:
@@ -269,13 +316,15 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         device_map="auto",
         low_cpu_mem_usage=True,
         load_in_8bit=False,
+        dtype="auto",
         **kwargs,
     ):
         if self.model:
             return self.model
 
         logger.info(f"Loading model {model_name_or_path}...")
-        dtype = torch.int8 if load_in_8bit else "auto"
+        if load_in_8bit:
+            dtype = torch.int8
         model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path,
             cache_dir=cache_dir,
@@ -294,21 +343,53 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         )
         if max_length is None:
             num_input_tokens = self.num_tokens_for_prompt(prompt)
-            max_length = self.default_max_tokens(self.model_name)
+            max_length = self.default_max_tokens()
             max_new_tokens = max_length - num_input_tokens
         else:
             max_new_tokens = max_length
         generation_kwargs["max_new_tokens"] = max_new_tokens
         generation_kwargs["keep_generated_only"] = True
-        prompt_text = "\n".join([m["content"] for m in prompt])
+        prompt_text = self.prompt_to_text(prompt)
         return prompt_text, generation_kwargs
 
 
-class T5Summarizer(InstructTunedSummarizer, Text2TextSummarizer):
+class InstructCausalLMSummarizer(InstructTunedSummarizer, CausalLMSummarizer):
+    def __init__(self, model_name_or_path, **kwargs) -> None:
+        super().__init__(model_name_or_path, **kwargs)
+
+
+class InstructText2TextSummarizer(InstructTunedSummarizer, Text2TextSummarizer):
     def __init__(self, model_name_or_path, **kwargs) -> None:
         super().__init__(model_name_or_path, **kwargs)
 
     def truncate_input(self, prompt, max_tokens, **kwargs):
         prompt = super().truncate_input(prompt, max_tokens, **kwargs)
-        prompt_text = "\n".join([m["content"] for m in prompt])
+        prompt_text = self.prompt_to_text(prompt)
+        return prompt_text
+    
+
+class T5Summarizer(InstructText2TextSummarizer):
+    def __init__(self, model_name_or_path, **kwargs) -> None:
+        super().__init__(model_name_or_path, **kwargs)
+
+    def default_article_prompt(self):
+        # From promptsource CNN/DM template:
+        # https://github.com/bigscience-workshop/promptsource
+        return "Summarize the article: {}"
+    
+    def default_task_prompt(self):
+        return None
+
+
+class AlpacaSummarizer(InstructCausalLMSummarizer):
+    def __init__(self, model_name_or_path, **kwargs) -> None:
+        super().__init__(model_name_or_path, **kwargs)
+
+    def prompt_to_text(self, prompt):
+        prompt_text = super().prompt_to_text(prompt)
+        prompt_text = (
+            "Below is an instruction that describes a task. "
+            "Write a response that appropriately completes the request.\n\n"
+            "### Instruction:\n{}\n\n### Response:"
+        ).format(prompt_text)
         return prompt_text
