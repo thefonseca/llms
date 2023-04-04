@@ -222,8 +222,8 @@ def config_logging(dataset_name, split, output_dir, prefix=None):
     logging.getLogger("absl").setLevel(logging.WARNING)
     return timestr
 
-def log(logger, message, verbose=False, max_length=200):
+def log(logger, message, verbose=False, max_length=300):
     level = logging.INFO if verbose else logging.DEBUG
-    if len(message) > max_length:
-        message = f"{message[:max_length]}..."
+    if max_length and len(message) > max_length:
+        message = f"{message[:max_length//2]} ... {message[-max_length//2:]}"
     logger.log(level, message)

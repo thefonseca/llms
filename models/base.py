@@ -88,10 +88,10 @@ class Summarizer:
         log(logger, f"Model kwargs:\n{pformat(kwargs)}", verbose=verbose)
         log(logger, f"Generation kwargs:\n{pformat(generation_kwargs)}", verbose=verbose)
         kwargs.update(generation_kwargs)
-        log(logger, f"Model input: {model_input}", verbose=verbose)
+        log(logger, f"Model input:\n{pformat(model_input)}", verbose=verbose)
         summary = self.generate_cached(self.model_name, model_input, **kwargs)
         summary = self.postprocess(summary)
-        log(logger, f"Summary:\n{summary}", verbose=verbose)
+        log(logger, f"Summary:\n{pformat(summary)}", verbose=verbose, max_length=None)
         return summary
 
     def is_last_result_from_cache(self):
@@ -123,7 +123,7 @@ class PromptBasedSummarizer(Summarizer):
         return "TL;DR:"
 
     def default_article_prompt(self):
-        return "Article: {}"
+        return "Article: {article}"
 
     def truncate_input(self, prompt, max_tokens, **kwargs):
         # discount maximum output length from max_tokens
@@ -164,18 +164,22 @@ class PromptBasedSummarizer(Summarizer):
         if system_prompt is None:
             system_prompt = self.system_prompt
 
-        article_prompt = article_prompt.format(text)
+        prompt_args = dict(
+            article=text,
+            num_sentences=num_sentences
+        )
+        article_prompt = article_prompt.format(**prompt_args)
         prompt = []
         if system_prompt:
             prompt.append({"role": "system", "content": system_prompt})
         prompt.append({"role": "user", "content": article_prompt})
         if task_prompt:
-            task_prompt = task_prompt.format(num_sentences)
+            task_prompt = task_prompt.format(**prompt_args)
             prompt.append({"role": "user", "content": task_prompt})
 
-        log(logger, f"System prompt: {system_prompt}", verbose=verbose)
-        log(logger, f"Article prompt: {article_prompt}", verbose=verbose)
-        log(logger, f"Task prompt: {task_prompt}", verbose=verbose)
+        log(logger, f"System prompt: {pformat(system_prompt)}", verbose=verbose)
+        log(logger, f"Article prompt: {pformat(article_prompt)}", verbose=verbose)
+        log(logger, f"Task prompt: {pformat(task_prompt)}", verbose=verbose)
         return prompt
 
     def num_tokens_for_prompt(self, messages):
@@ -224,4 +228,4 @@ class InstructTunedSummarizer(PromptBasedSummarizer):
         super().__init__(model_name_or_path, **kwargs)
 
     def default_task_prompt(self):
-        return "Summarize the article above in {} sentences"
+        return "Summarize the article above in {num_sentences} sentences."
