@@ -1,5 +1,6 @@
 import logging
 
+from accelerate import infer_auto_device_map, init_empty_weights
 import torch
 from transformers import (
     AutoConfig,
@@ -22,6 +23,7 @@ class HFSummarizer(Summarizer):
         model_name_or_path,
         cache_dir=None,
         device_map="auto",
+        max_memory=None,
         low_cpu_mem_usage=True,
         load_in_8bit=False,
         dtype="auto",
@@ -30,6 +32,7 @@ class HFSummarizer(Summarizer):
         super().__init__(model_name_or_path, **kwargs)
         self.cache_dir = cache_dir
         self.device_map = device_map
+        self.max_memory = max_memory
         self.low_cpu_mem_usage = low_cpu_mem_usage
         self.load_in_8bit = load_in_8bit
         self.dtype = dtype
@@ -64,6 +67,7 @@ class HFSummarizer(Summarizer):
         return dict(
             cache_dir=self.cache_dir,
             device_map=self.device_map,
+            max_memory=self.max_memory,
             low_cpu_mem_usage=self.low_cpu_mem_usage,
             load_in_8bit=self.load_in_8bit,
             dtype=self.dtype,
@@ -134,6 +138,20 @@ class HFSummarizer(Summarizer):
     
         return max_tokens
 
+    def infer_device_map(self, model_name_or_path, device_map="auto", max_memory=None):
+        # Example: max_memory = {0: "22GiB", "cpu": "30GiB"}
+        if max_memory:
+            logger.info(f'Inferring device map for {max_memory}...')
+            with init_empty_weights():
+                model = AutoModelForCausalLM.from_pretrained(model_name_or_path)
+            device_map = infer_auto_device_map(model, max_memory=max_memory, 
+                                               no_split_module_classes=["BloomBlock", 
+                                                                        "OPTDecoderLayer", 
+                                                                        "LLaMADecoderLayer", 
+                                                                        "LlamaDecoderLayer"])
+        logger.info(f'Using device map: {device_map}')
+        return device_map
+
     @memoize()
     def generate_cached(
         self,
@@ -141,6 +159,7 @@ class HFSummarizer(Summarizer):
         model_input,
         cache_dir=None,
         device_map="auto",
+        max_memory=None,
         low_cpu_mem_usage=True,
         load_in_8bit=False,
         dtype="auto",
@@ -155,6 +174,7 @@ class HFSummarizer(Summarizer):
             model_name_or_path,
             cache_dir=cache_dir,
             device_map=device_map,
+            max_memory=max_memory,
             low_cpu_mem_usage=low_cpu_mem_usage,
             load_in_8bit=load_in_8bit,
             dtype=dtype,
@@ -203,6 +223,7 @@ class Text2TextSummarizer(HFSummarizer):
         model_name_or_path,
         cache_dir=None,
         device_map="auto",
+        max_memory=None,
         low_cpu_mem_usage=True,
         load_in_8bit=False,
         dtype="auto",
@@ -214,11 +235,14 @@ class Text2TextSummarizer(HFSummarizer):
         logger.info(f"Loading model {model_name_or_path}...")
         if load_in_8bit:
             dtype = torch.int8
+
         if any(
             [x in self.model_name] for x in ["google/pegasus", "google/bigbird-pegasus"]
         ):
             device_map = None
             low_cpu_mem_usage = False
+        else:
+            device_map = self.infer_device_map(model_name_or_path, max_memory)
 
         model = AutoModelForSeq2SeqLM.from_pretrained(
             model_name_or_path,
@@ -314,6 +338,7 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         model_name_or_path,
         cache_dir=None,
         device_map="auto",
+        max_memory=None,
         low_cpu_mem_usage=True,
         load_in_8bit=False,
         dtype="auto",
@@ -325,6 +350,8 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         logger.info(f"Loading model {model_name_or_path}...")
         if load_in_8bit:
             dtype = torch.int8
+
+        device_map = self.infer_device_map(model_name_or_path, device_map=device_map, max_memory=max_memory)
         model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path,
             cache_dir=cache_dir,
