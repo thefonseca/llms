@@ -13,7 +13,9 @@ class Summarizer:
         self.model_name = model_name
         
     def __repr__(self):
-        return f"{self.__class__.__name__}:\n{pformat(self.__dict__)}"
+        attr_dict = self.__dict__.copy()
+        attr_dict["default_max_tokens"] = self.default_max_tokens()
+        return f"{self.__class__.__name__}:\n{pformat(attr_dict)}"
 
     def load_tokenizer(model_name_or_path, **model_kwargs):
         raise NotImplementedError("Method load_tokenizer not implemented.")
@@ -44,7 +46,7 @@ class Summarizer:
             input, max_length=max_tokens, truncation=True, padding="max_length"
         )
         input = tokenizer.decode(
-            input, skip_special_tokens=True, clean_up_tokenization_spaces=False
+            input, skip_special_tokens=True, clean_up_tokenization_spaces=None
         )
         return input
 
@@ -64,10 +66,10 @@ class Summarizer:
                 "max_tokens", self.default_max_tokens()
             )
             log(logger, f"Truncating input to {max_tokens} max tokens", verbose=verbose)
-            model_input = self.truncate_input(model_input, max_tokens)
+            model_input, truncated_tokens = self.truncate_input(model_input, max_tokens)
 
-        return model_input, generation_kwargs
-
+        return model_input, truncated_tokens, generation_kwargs
+        
     def postprocess(self, summary):
         # rougeLSum expects newline after each sentence
         summary = "\n".join([s.strip() for s in sent_tokenize(summary)])
@@ -80,7 +82,7 @@ class Summarizer:
         verbose=False,
         **generation_kwargs,
     ):
-        model_input, generation_kwargs = self.preprocess(
+        model_input, _, generation_kwargs = self.preprocess(
             text, truncation=truncation, verbose=verbose, **generation_kwargs
         )
         model_kwargs = self.get_model_kwargs()
@@ -143,9 +145,11 @@ class PromptBasedSummarizer(Summarizer):
             text = prompt[longest_idx]["content"]
             tokens = tokenizer.encode(text)
             tokens = tokens[:-excess_tokens]
-            truncated_prompt[longest_idx]["content"] = tokenizer.decode(tokens)
+            truncated_prompt[longest_idx]["content"] = tokenizer.decode(tokens, 
+                                                                        skip_special_tokens=True, 
+                                                                        clean_up_tokenization_spaces=None)
             prompt = truncated_prompt
-        return prompt
+        return prompt, excess_tokens
 
     def build_input(
         self,
@@ -192,32 +196,47 @@ class PromptBasedSummarizer(Summarizer):
             num_tokens += len(tokenizer.encode(message["content"]))
         return num_tokens
 
-    def num_tokens_for_texts(
+    def token_statistics_for_input(self, text, truncation, **generation_kwargs):
+        prompt, truncated_tokens, _ = self.preprocess(text, 
+                                                      truncation=truncation, 
+                                                      return_truncation_info=True, 
+                                                      **generation_kwargs)
+        tokenizer_kwargs = self.get_tokenizer_kwargs()
+        tokenizer = self.load_tokenizer(self.model_name, **tokenizer_kwargs)
+        num_tokens = len(tokenizer.encode(prompt))
+        return num_tokens, truncated_tokens
+
+    def token_statistics(
         self,
         texts,
         truncation=True,
         **generation_kwargs,
     ):
-        messages = []
         progress = get_progress_bar()
         task = add_progress_task(
             progress,
-            f"Calculating number of tokens for {self.model_name}...",
+            f"Calculating token statistics for {self.model_name}...",
             total=len(texts),
             existing_ok=False,
         )
-        num_tokens = 0
+        truncated_tokens = []
+        num_tokens = []
+        
         with progress:
             for text in texts:
-                prompt = self.build_input(
-                    text,
-                    truncation=truncation,
-                    **generation_kwargs,
-                )
-                messages.extend(prompt)
-                num_tokens += self.num_tokens_for_prompt(prompt)
+                result = self.token_statistics_for_input(text, truncation, 
+                                                         **generation_kwargs)
+                num_tokens.append(result[0])
+                truncated_tokens.append(result[1])
                 progress.update(task, advance=1)
-        return num_tokens
+
+        stats = dict(
+            total_tokens=sum(num_tokens),
+            mean_tokens=np.mean(num_tokens),
+            total_truncation=sum(truncated_tokens),
+            mean_truncation=np.mean(truncated_tokens),
+        )
+        return stats
     
     def prompt_to_text(self, prompt):
         return "\n".join([m["content"] for m in prompt])

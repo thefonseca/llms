@@ -192,7 +192,8 @@ class HFSummarizer(Summarizer):
 
             if isinstance(model, LlamaForCausalLM):
                 # If the prompt is ending with EOS, often the generation will stop abruptly.
-                if input_ids[0][-1] == tokenizer.eos_token_id:
+                EOS_TOKEN_ID = 2
+                if input_ids[0][-1] == EOS_TOKEN_ID:
                     input_ids = input_ids[:, :-1]
 
             input_ids = input_ids.to(0)
@@ -207,7 +208,7 @@ class HFSummarizer(Summarizer):
             summary = tokenizer.batch_decode(
                 generated_ids.cpu(),
                 skip_special_tokens=True,
-                clean_up_tokenization_spaces=False,
+                clean_up_tokenization_spaces=None,
             )[0]
             if isinstance(model_input, str) and keep_generated_only:
                 summary = summary[len(model_input) :]
@@ -278,11 +279,23 @@ class Text2TextSummarizer(HFSummarizer):
         input = tokenizer(
             [input],
             padding="max_length",
-            max_length=max_tokens,
             truncation=True,
             return_tensors="pt",
         )
-        return input
+        n_tokens = len(input["input_ids"])
+        truncated_tokens = 0
+
+        if n_tokens > max_tokens:
+            input = tokenizer(
+                [input],
+                padding="max_length",
+                max_length=max_tokens,
+                truncation=True,
+                return_tensors="pt",
+            )
+            truncated_tokens = n_tokens - max_tokens
+
+        return input, truncated_tokens
 
     def preprocess(
         self,
@@ -292,7 +305,7 @@ class Text2TextSummarizer(HFSummarizer):
         do_sample=None,
         **generation_kwargs,
     ):
-        model_input, generation_kwargs = super().preprocess(
+        model_input, truncated_tokens, generation_kwargs = super().preprocess(
             text, truncation=truncation, **generation_kwargs
         )
         if max_length is None:
@@ -317,7 +330,7 @@ class Text2TextSummarizer(HFSummarizer):
                     ):
                         generation_kwargs[key] = param
 
-        return model_input, generation_kwargs
+        return model_input, truncated_tokens, generation_kwargs
 
     def postprocess(self, summary):
         # special newline postprocessing for some models
@@ -365,7 +378,7 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         return model
 
     def preprocess(self, text, truncation=True, max_length=None, **generation_kwargs):
-        prompt, generation_kwargs = super().preprocess(
+        prompt, truncated_tokens, generation_kwargs = super().preprocess(
             text, truncation=truncation, **generation_kwargs
         )
         if max_length is None:
@@ -377,7 +390,7 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         generation_kwargs["max_new_tokens"] = max_new_tokens
         generation_kwargs["keep_generated_only"] = True
         prompt_text = self.prompt_to_text(prompt)
-        return prompt_text, generation_kwargs
+        return prompt_text, truncated_tokens, generation_kwargs
 
 
 class InstructCausalLMSummarizer(InstructTunedSummarizer, CausalLMSummarizer):
@@ -390,9 +403,9 @@ class InstructText2TextSummarizer(InstructTunedSummarizer, Text2TextSummarizer):
         super().__init__(model_name_or_path, **kwargs)
 
     def truncate_input(self, prompt, max_tokens, **kwargs):
-        prompt = super().truncate_input(prompt, max_tokens, **kwargs)
+        prompt, truncated_tokens = super().truncate_input(prompt, max_tokens, **kwargs)
         prompt_text = self.prompt_to_text(prompt)
-        return prompt_text
+        return prompt_text, truncated_tokens
     
 
 class T5Summarizer(InstructText2TextSummarizer):

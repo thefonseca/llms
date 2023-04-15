@@ -1,4 +1,5 @@
 import logging
+from pprint import pformat
 import re
 import time
 
@@ -72,9 +73,9 @@ def predict_summaries(
     model_kwargs, generation_kwargs = parse_kwargs(kwargs)
     summarizer = summarizer_for_model(model_name_or_path, **model_kwargs)
 
-    if hasattr(summarizer, "num_tokens_for_texts"):
-        n_tokens = summarizer.num_tokens_for_texts(sources, max_length=max_length)
-        logger.info(f"Total input tokens to be processed: {n_tokens}")
+    if hasattr(summarizer, "token_statistics"):
+        stats = summarizer.token_statistics(sources, max_length=max_length)
+        logger.info(f"Input statistics:\n{pformat(stats)}")
 
     with progress:
         for idx, text in enumerate(sources):

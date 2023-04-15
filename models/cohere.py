@@ -59,7 +59,7 @@ class CohereSummarizer(InstructTunedSummarizer):
         return "{}"
 
     def preprocess(self, text, truncation=True, **generation_kwargs):
-        model_input, generation_kwargs = super().preprocess(
+        model_input, truncated_tokens, generation_kwargs = super().preprocess(
             text, truncation=truncation, **generation_kwargs
         )
         max_tokens = generation_kwargs.pop("max_length", 256)
@@ -77,7 +77,7 @@ class CohereSummarizer(InstructTunedSummarizer):
         temperature = generation_kwargs.pop("temperature", 1.0)
         generation_kwargs["temperature"] = temperature
         model_input = "\n".join([m["content"] for m in model_input])
-        return model_input, generation_kwargs
+        return model_input, truncated_tokens, generation_kwargs
 
     @staticmethod
     @memoize()

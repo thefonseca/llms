@@ -62,7 +62,7 @@ class OpenAISummarizer(InstructTunedSummarizer):
         return response
 
     def preprocess(self, text, truncation=True, **generation_kwargs):
-        prompt, generation_kwargs = super().preprocess(
+        prompt, _, generation_kwargs = super().preprocess(
             text, truncation=truncation, **generation_kwargs
         )
         max_tokens = generation_kwargs.pop(
