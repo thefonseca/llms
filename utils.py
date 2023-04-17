@@ -88,7 +88,16 @@ def log_scores(name, scores):
         info = [f"{name}:"]
         for key in scores.keys():
             if type(scores[key]) == dict:
-                _scores = [f"{scores[key][x]:.3f}" for x in ["low", "mean", "high"]]
+                _scores = []
+                for confidence_key in ["low", "mean", "high"]:
+                    if isinstance(scores[key][confidence_key], np.ndarray) or \
+                        isinstance(scores[key][confidence_key], list):
+                        score = [f"{x:.3f}" for x in scores[key][confidence_key]]
+                        score = f"\n  {confidence_key}: {str(score)}"
+                    else:
+                        score = f"{scores[key][confidence_key]:.3f}"               
+                    _scores.append(score)
+                
                 _scores = ", ".join(_scores)
             else:
                 _scores = f"{scores[key]:.3f}"
@@ -119,14 +128,16 @@ def aggregate_scores(scores):
         ci = bootstrap(
             (agg_scores[key],),
             np.mean,
+            vectorized=True,
+            axis=0,
             confidence_level=0.95,
             random_state=17,
             method="BCa",
         )
         confidence_intervals[key] = {
-            "low": ci.confidence_interval.low,
-            "high": ci.confidence_interval.high,
-            "mean": np.mean(agg_scores[key]),
+            "low": ci.confidence_interval.low.tolist(),
+            "high": ci.confidence_interval.high.tolist(),
+            "mean": np.mean(agg_scores[key], axis=0).tolist(),
         }
 
     return confidence_intervals
@@ -158,12 +169,17 @@ def get_output_path(
     split,
     model_name=None,
     timestr=None,
+    run_id=None,
 ):
     save_to = None
     if output_dir:
         save_subdir = f"{dataset}-{split}"
         if timestr:
             save_subdir = f"{save_subdir}_{timestr}"
+
+        if run_id:
+            save_subdir = f"{save_subdir}_{run_id}"
+            
         if model_name:
             save_to = f"{model_name}"
             save_to = os.path.join(output_dir, save_subdir, save_to)
@@ -198,9 +214,9 @@ def get_log_path(
         return log_path
 
 
-def config_logging(dataset_name, split, output_dir, prefix=None):
+def config_logging(dataset_name, split, output_dir, prefix=None, run_id=None,):
     timestr = time.strftime("%Y%m%d-%H%M%S")
-    log_dir = get_output_path(output_dir, dataset_name, split, timestr=timestr)
+    log_dir = get_output_path(output_dir, dataset_name, split, timestr=timestr, run_id=run_id)
     if log_dir and Path(log_dir).is_dir():
         log_dir = Path(log_dir).parent
 

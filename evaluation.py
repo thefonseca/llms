@@ -229,10 +229,11 @@ def evaluate_model(
     cache_end=None,
     cache_dir=None,
     metrics=None,
+    run_id=None,
     seed=17,
     **kwargs,
 ):
-    timestr = config_logging(dataset_name, split, output_dir)
+    timestr = config_logging(dataset_name, split, output_dir, run_id=run_id)
     eval_data = datasets.load_dataset(dataset_path, dataset_name, cache_dir=cache_dir)
     eval_data = eval_data[split]
     sources = eval_data[source_key][:max_samples]
@@ -307,6 +308,7 @@ def evaluate_model(
             split,
             model_name=model_name.replace("/", "_"),
             timestr=timestr,
+            run_id=run_id
         )
         evaluate(
             preds,
