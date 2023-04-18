@@ -59,7 +59,9 @@ class Summarizer:
     def preprocess(self, text, truncation=True, verbose=False, **generation_kwargs):
         if isinstance(text, list):
             text = "\n".join(text)
-        model_input = self.build_input(text, verbose=verbose, **generation_kwargs)
+        model_input, generation_kwargs = self.build_input(text, 
+                                                          verbose=verbose, 
+                                                          **generation_kwargs)
 
         if truncation:
             max_tokens = generation_kwargs.get(
@@ -170,13 +172,15 @@ class PromptBasedSummarizer(Summarizer):
 
         prompt_args = dict(
             article=text,
-            num_sentences=num_sentences
-        )
+            num_sentences=num_sentences, 
+            **generation_kwargs)
         article_prompt = article_prompt.format(**prompt_args)
         prompt = []
+
         if system_prompt:
             prompt.append({"role": "system", "content": system_prompt})
         prompt.append({"role": "user", "content": article_prompt})
+
         if task_prompt:
             task_prompt = task_prompt.format(**prompt_args)
             prompt.append({"role": "user", "content": task_prompt})
@@ -184,7 +188,7 @@ class PromptBasedSummarizer(Summarizer):
         log(logger, f"System prompt: {pformat(system_prompt)}", verbose=verbose)
         log(logger, f"Article prompt: {pformat(article_prompt)}", verbose=verbose)
         log(logger, f"Task prompt: {pformat(task_prompt)}", verbose=verbose)
-        return prompt
+        return prompt, generation_kwargs
 
     def num_tokens_for_prompt(self, messages):
         tokenizer_kwargs = self.get_tokenizer_kwargs()
