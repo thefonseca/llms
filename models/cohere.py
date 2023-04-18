@@ -4,7 +4,7 @@ from typing import List
 import cohere
 
 from .base import InstructTunedSummarizer
-from ..memoizer import memoize
+from memoizer import memoize
 
 
 def get_api_key():

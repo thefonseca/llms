@@ -3,15 +3,15 @@ from pprint import pformat
 import re
 import time
 
-from .models.huggingface import (
+from models.huggingface import (
     Text2TextSummarizer,
     CausalLMSummarizer,
     T5Summarizer,
     AlpacaSummarizer,
 )
-from .models.openai import OpenAISummarizer
-from .models.cohere import CohereSummarizer
-from .utils import get_progress_bar, add_progress_task
+from models.openai import OpenAISummarizer
+from models.cohere import CohereSummarizer
+from utils import get_progress_bar, add_progress_task
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ def predict_summaries(
 
     if hasattr(summarizer, "token_statistics"):
         stats = summarizer.token_statistics(sources, max_length=max_length)
-        logger.info(f"Input statistics:\n{pformat(stats)}")
+        logger.info(f"Token statistics for input:\n{pformat(stats)}")
 
     with progress:
         for idx, text in enumerate(sources):

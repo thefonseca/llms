@@ -4,7 +4,7 @@ import openai
 import tiktoken
 
 from .base import InstructTunedSummarizer
-from ..memoizer import memoize
+from memoizer import memoize
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 

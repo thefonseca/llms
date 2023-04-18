@@ -12,7 +12,7 @@ from transformers import (
 )
 
 from .base import Summarizer, PromptBasedSummarizer, InstructTunedSummarizer
-from ..memoizer import memoize
+from memoizer import memoize
 
 logger = logging.getLogger(__name__)
 
