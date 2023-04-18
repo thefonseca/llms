@@ -51,6 +51,22 @@ Notes:
 - `num_sentences` controls length of instruct-tuned summaries.
 - `path_to_alpaca_checkpoint` has to contain the string "alpaca" so that the correct summarizer class `AlpacaSummarizer` is used.
 
+Evaluating [ChatGPT API](https://platform.openai.com/docs/api-reference/chat) on [arXiv](https://huggingface.co/datasets/scientific_papers) validation split:
+
+```bash
+export OPENAI_API_KEY=<your_api_key>
+python evaluation.py \
+--dataset_path scientific_papers \
+--dataset_name arxiv \
+--split validation \
+--source_key article \
+--target_key abstract \
+--max_samples 1000 \
+--model_name gpt-3.5-turbo \
+--num_sentences 7 \
+--output_dir output
+```
+
 Evaluating summary predictions from a CSV file:
 
 ```bash

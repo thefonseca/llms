@@ -1,3 +1,4 @@
+import getpass
 import os
 
 import openai
@@ -45,7 +46,7 @@ class OpenAISummarizer(InstructTunedSummarizer):
     See https://github.com/openai/openai-python/blob/main/chatml.md for information on how messages are converted to tokens."""
             )
 
-    def default_max_tokens(self, model_name):
+    def default_max_tokens(self):
         return 4096
 
     @staticmethod
@@ -62,14 +63,14 @@ class OpenAISummarizer(InstructTunedSummarizer):
         return response
 
     def preprocess(self, text, truncation=True, **generation_kwargs):
-        prompt, _, generation_kwargs = super().preprocess(
+        prompt, truncated_tokens, generation_kwargs = super().preprocess(
             text, truncation=truncation, **generation_kwargs
         )
         max_tokens = generation_kwargs.pop(
-            "max_length", self.default_max_tokens(self.model_name)
+            "max_length", self.default_max_tokens()
         )
         generation_kwargs["max_tokens"] = max_tokens
-        return prompt, generation_kwargs
+        return prompt, truncated_tokens, generation_kwargs
 
     def postprocess(self, summary):
         summary = summary["choices"][0]["message"]["content"]

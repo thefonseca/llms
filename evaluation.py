@@ -228,7 +228,7 @@ def evaluate_model(
     output_dir=None,
     cache_start=0,
     cache_end=None,
-    cache_dir=None,
+    data_cache_dir=None,
     metrics=None,
     run_id=None,
     seed=17,
@@ -239,7 +239,7 @@ def evaluate_model(
     if model_name is None and prediction_path is None:
         raise ValueError("model_name or prediction_path is required")
     
-    eval_data = datasets.load_dataset(dataset_path, dataset_name, cache_dir=cache_dir)
+    eval_data = datasets.load_dataset(dataset_path, dataset_name, cache_dir=data_cache_dir)
     eval_data = eval_data[split]
     sources = eval_data[source_key][:max_samples]
     targets = eval_data[target_key][:max_samples]
@@ -276,7 +276,6 @@ def evaluate_model(
                 sources,
                 cache_start=cache_start,
                 cache_end=cache_end,
-                cache_dir=cache_dir,
                 **kwargs,
             )
 

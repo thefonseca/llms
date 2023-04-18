@@ -147,9 +147,13 @@ class PromptBasedSummarizer(Summarizer):
             text = prompt[longest_idx]["content"]
             tokens = tokenizer.encode(text)
             tokens = tokens[:-excess_tokens]
-            truncated_prompt[longest_idx]["content"] = tokenizer.decode(tokens, 
-                                                                        skip_special_tokens=True, 
-                                                                        clean_up_tokenization_spaces=None)
+            try:
+                truncated_prompt[longest_idx]["content"] = tokenizer.decode(tokens, 
+                                                                            skip_special_tokens=True, 
+                                                                            clean_up_tokenization_spaces=None)
+            except TypeError:
+                truncated_prompt[longest_idx]["content"] = tokenizer.decode(tokens)
+
             prompt = truncated_prompt
         return prompt, excess_tokens
 
@@ -203,11 +207,12 @@ class PromptBasedSummarizer(Summarizer):
     def token_statistics_for_input(self, text, truncation, **generation_kwargs):
         prompt, truncated_tokens, _ = self.preprocess(text, 
                                                       truncation=truncation, 
-                                                      return_truncation_info=True, 
                                                       **generation_kwargs)
         tokenizer_kwargs = self.get_tokenizer_kwargs()
         tokenizer = self.load_tokenizer(self.model_name, **tokenizer_kwargs)
-        num_tokens = len(tokenizer.encode(prompt))
+        if not isinstance(prompt, str):
+            prompt_text = self.prompt_to_text(prompt)
+        num_tokens = len(tokenizer.encode(prompt_text))
         return num_tokens, truncated_tokens
 
     def token_statistics(
