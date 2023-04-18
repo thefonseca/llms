@@ -10,9 +10,9 @@ import pandas as pd
 from p_tqdm import p_map
 from rouge_score import scoring
 
-from .inference import predict_summaries
-from .metrics import summarization_metrics
-from .utils import (
+from inference import predict_summaries
+from metrics import summarization_metrics
+from utils import (
     aggregate_scores,
     compute_metric,
     config_logging,
@@ -216,12 +216,13 @@ def evaluate(
 
 
 def evaluate_model(
-    model_name="google/pegasus-arxiv",
-    dataset_path="scientific_papers",
-    dataset_name="arxiv",
+    dataset_path,
+    dataset_name,
     split="test",
     source_key="article",
     target_key="abstract",
+    model_name=None,
+    prediction_path=None,
     prediction_key="prediction",
     max_samples=None,
     output_dir=None,
@@ -234,24 +235,25 @@ def evaluate_model(
     **kwargs,
 ):
     timestr = config_logging(dataset_name, split, output_dir, run_id=run_id)
+    
+    if model_name is None and prediction_path is None:
+        raise ValueError("model_name or prediction_path is required")
+    
     eval_data = datasets.load_dataset(dataset_path, dataset_name, cache_dir=cache_dir)
     eval_data = eval_data[split]
     sources = eval_data[source_key][:max_samples]
     targets = eval_data[target_key][:max_samples]
 
-    logger.info("Reference summary (sanity check)")
-
-    evaluate(
-        targets,
-        targets,
-        n_samples=max_samples,
-        seed=seed,
-    )
-
-    if isinstance(model_name, (list, tuple)):
+    model_names = []
+    if model_name and isinstance(model_name, (list, tuple)):
         model_names = model_name
-    else:
-        model_names = [model_name]
+    elif model_name:
+        model_names.append(model_name)
+
+    if prediction_path and isinstance(prediction_path, (list, tuple)):
+        model_names.extend(prediction_path)
+    elif prediction_path:
+        model_names.append(prediction_path)
 
     def is_csv_file(path):
         return os.path.exists(path) and path[-4:].lower() == ".csv"
