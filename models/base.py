@@ -211,8 +211,8 @@ class PromptBasedSummarizer(Summarizer):
         tokenizer_kwargs = self.get_tokenizer_kwargs()
         tokenizer = self.load_tokenizer(self.model_name, **tokenizer_kwargs)
         if not isinstance(prompt, str):
-            prompt_text = self.prompt_to_text(prompt)
-        num_tokens = len(tokenizer.encode(prompt_text))
+            prompt = self.prompt_to_text(prompt)
+        num_tokens = len(tokenizer.encode(prompt))
         return num_tokens, truncated_tokens
 
     def token_statistics(

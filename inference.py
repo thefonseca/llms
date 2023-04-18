@@ -24,7 +24,7 @@ def summarizer_for_model(model_name, **kwargs):
         "bigscience/T0[_\d\w]*": T5Summarizer,
         "google/flan-t5[-\d\w]+": T5Summarizer,
         ".*alpaca.*": AlpacaSummarizer,
-        "summarize-[\d\w]+": CohereSummarizer,
+        "summarize-((medium)|(xlarge))": CohereSummarizer,
     }
 
     for key, val in summarizer_map.items():

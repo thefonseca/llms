@@ -49,14 +49,14 @@ class CohereSummarizer(InstructTunedSummarizer):
     def load_tokenizer(model_name, **kwargs):
         return CohereTokenizer()
 
-    def default_max_tokens(self, model_name):
+    def default_max_tokens(self):
         return 2048
 
     def default_task_prompt(self):
         return None
 
     def default_article_prompt(self):
-        return "{}"
+        return "{article}"
 
     def preprocess(self, text, truncation=True, **generation_kwargs):
         model_input, truncated_tokens, generation_kwargs = super().preprocess(
