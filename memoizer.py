@@ -15,12 +15,24 @@ import fire
 @dataclass(frozen=True)
 class Constants:
     CACHE_MISS = 0
-
-
+    DEFAULT_CACHE_DIR = "."
+    DEFAULT_CACHE_SIZE = int(40e9)
 constants = Constants()
+
+def get_cache_dir():
+    cache_dir = os.getenv("MEMOIZER_HOME")
+    if cache_dir is None:
+        cache_dir = os.getenv("HOME", constants.DEFAULT_CACHE_DIR)
+    return cache_dir
+
+
+def get_cache_size():
+    return os.getenv("MEMOIZER_SIZE", constants.DEFAULT_CACHE_SIZE)
+
+
 logger = logging.getLogger(__name__)
 default_cache = Cache(
-    os.path.join(os.getenv("HOME", "."), ".memoize"), size_limit=int(40e9)
+    os.path.join(get_cache_dir(), ".memoize"), size_limit=get_cache_size()
 )
 
 
