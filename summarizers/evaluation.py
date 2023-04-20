@@ -10,9 +10,9 @@ import pandas as pd
 from p_tqdm import p_map
 from rouge_score import scoring
 
-from inference import predict_summaries
-from metrics import summarization_metrics
-from utils import (
+from .inference import predict_summaries
+from .metrics import summarization_metrics
+from .utils import (
     aggregate_scores,
     compute_metric,
     config_logging,
@@ -100,10 +100,10 @@ def _get_text_statistics(target, summary):
     length_diff = len(pred_words) - len(target_words)
     length_diffs.append(length_diff)
     sents_per_summary.append(len(summary_sents))
-    tokens_per_summary_sent.append(np.mean([len(s.split()) for s in summary_sents]))
+    tokens_per_summary_sent.append(np.mean([len(word_tokenize(s)) for s in summary_sents]))
     tokens_per_summary.append(len(pred_words))
     sents_per_abstract.append(len(target_sents))
-    tokens_per_abstract_sent.append(np.mean([len(s.split()) for s in target_sents]))
+    tokens_per_abstract_sent.append(np.mean([len(word_tokenize(s)) for s in target_sents]))
     tokens_per_abstract.append(len(target_words))
 
     statistics = dict(

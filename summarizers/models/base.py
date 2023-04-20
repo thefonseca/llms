@@ -3,7 +3,7 @@ from pprint import pformat
 
 import numpy as np
 
-from utils import sent_tokenize, get_progress_bar, add_progress_task, log
+from ..utils import sent_tokenize, get_progress_bar, add_progress_task, log
 
 logger = logging.getLogger(__name__)
 

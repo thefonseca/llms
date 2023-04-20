@@ -3,15 +3,15 @@ from pprint import pformat
 import re
 import time
 
-from models.huggingface import (
+from .models.huggingface import (
     Text2TextSummarizer,
     CausalLMSummarizer,
     T5Summarizer,
     AlpacaSummarizer,
 )
-from models.openai import OpenAISummarizer
-from models.cohere import CohereSummarizer
-from utils import get_progress_bar, add_progress_task
+from .models.openai import OpenAISummarizer
+from .models.cohere import CohereSummarizer
+from .utils import get_progress_bar, add_progress_task
 
 logger = logging.getLogger(__name__)
 

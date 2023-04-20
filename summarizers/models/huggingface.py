@@ -12,7 +12,7 @@ from transformers import (
 )
 
 from .base import Summarizer, PromptBasedSummarizer, InstructTunedSummarizer
-from memoizer import memoize
+from ..memoizer import memoize
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +83,7 @@ class HFSummarizer(Summarizer):
         logger.info(f"Loading tokenizer {model_name_or_path}...")
         if "google/pegasus-x-base" in model_name_or_path:
             model_name_or_path = "google/pegasus-x-base"
+
         tokenizer = AutoTokenizer.from_pretrained(
             model_name_or_path, **kwargs
         )
