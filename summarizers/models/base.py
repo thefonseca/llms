@@ -53,8 +53,8 @@ class Summarizer:
     def cached_generation_fn(self):
         return self.generate_cached
 
-    def build_input(self, text, **kwargs):
-        return text
+    def build_input(self, text, verbose=False, **kwargs):
+        return text, kwargs
 
     def preprocess(self, text, truncation=True, verbose=False, **generation_kwargs):
         if isinstance(text, list):
