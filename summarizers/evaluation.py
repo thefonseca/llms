@@ -231,10 +231,12 @@ def evaluate_model(
     data_cache_dir=None,
     metrics=None,
     run_id=None,
+    timestr=None,
     seed=17,
     **kwargs,
 ):
-    timestr = config_logging(dataset_name, split, output_dir, run_id=run_id)
+    if timestr is None:
+        timestr = config_logging(dataset_name, split, output_dir, run_id=run_id)
     
     if model_name is None and prediction_path is None:
         raise ValueError("model_name or prediction_path is required")
@@ -307,7 +309,7 @@ def evaluate_model(
             output_dir,
             dataset_name,
             split,
-            model_name=model_name.replace("/", "_"),
+            model_name=model_name,
             timestr=timestr,
             run_id=run_id
         )

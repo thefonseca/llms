@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import logging
+import re
 import time
 
 import nltk
@@ -181,7 +182,8 @@ def get_output_path(
             save_subdir = f"{save_subdir}_{run_id}"
             
         if model_name:
-            save_to = f"{model_name}"
+            save_to = re.sub('[^\w\d]', '_', model_name)
+            save_to = re.sub('^_+', '', save_to)
             save_to = os.path.join(output_dir, save_subdir, save_to)
         else:
             save_to = os.path.join(output_dir, save_subdir)
@@ -214,7 +216,7 @@ def get_log_path(
         return log_path
 
 
-def config_logging(dataset_name, split, output_dir, prefix=None, run_id=None,):
+def config_logging(dataset_name, split, output_dir, prefix=None, run_id=None):
     timestr = time.strftime("%Y%m%d-%H%M%S")
     log_dir = get_output_path(output_dir, dataset_name, split, timestr=timestr, run_id=run_id)
     if log_dir and Path(log_dir).is_dir():
