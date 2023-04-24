@@ -100,10 +100,14 @@ def _get_text_statistics(target, summary):
     length_diff = len(pred_words) - len(target_words)
     length_diffs.append(length_diff)
     sents_per_summary.append(len(summary_sents))
-    tokens_per_summary_sent.append(np.mean([len(word_tokenize(s)) for s in summary_sents]))
+    tokens_per_summary_sent.append(
+        np.mean([len(word_tokenize(s)) for s in summary_sents])
+    )
     tokens_per_summary.append(len(pred_words))
     sents_per_abstract.append(len(target_sents))
-    tokens_per_abstract_sent.append(np.mean([len(word_tokenize(s)) for s in target_sents]))
+    tokens_per_abstract_sent.append(
+        np.mean([len(word_tokenize(s)) for s in target_sents])
+    )
     tokens_per_abstract.append(len(target_words))
 
     statistics = dict(
@@ -222,6 +226,7 @@ def evaluate_model(
     source_key="article",
     target_key="abstract",
     model_name=None,
+    summarizer_class=None,
     prediction_path=None,
     prediction_key="prediction",
     max_samples=None,
@@ -237,11 +242,13 @@ def evaluate_model(
 ):
     if timestr is None:
         timestr = config_logging(dataset_name, split, output_dir, run_id=run_id)
-    
+
     if model_name is None and prediction_path is None:
-        raise ValueError("model_name or prediction_path is required")
-    
-    eval_data = datasets.load_dataset(dataset_path, dataset_name, cache_dir=data_cache_dir)
+        raise ValueError("One of 'model_name' or 'prediction_path' is required")
+
+    eval_data = datasets.load_dataset(
+        dataset_path, dataset_name, cache_dir=data_cache_dir
+    )
     eval_data = eval_data[split]
     sources = eval_data[source_key][:max_samples]
     targets = eval_data[target_key][:max_samples]
@@ -276,6 +283,7 @@ def evaluate_model(
             preds = predict_summaries(
                 model_name,
                 sources,
+                summarizer_class=summarizer_class,
                 cache_start=cache_start,
                 cache_end=cache_end,
                 **kwargs,
@@ -311,7 +319,7 @@ def evaluate_model(
             split,
             model_name=model_name,
             timestr=timestr,
-            run_id=run_id
+            run_id=run_id,
         )
         evaluate(
             preds,

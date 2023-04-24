@@ -39,13 +39,13 @@ def summarizer_for_model(model_name, **kwargs):
     return summarizer
 
 
-def parse_kwargs(kwargs, model_prefix='model_'):
+def parse_kwargs(kwargs, model_prefix="model_"):
     model_kwargs = {}
     generation_kwargs = {}
 
     for key, value in kwargs.items():
-        if key[:len(model_prefix)] == model_prefix:
-            key = key[len(model_prefix):]
+        if key[: len(model_prefix)] == model_prefix:
+            key = key[len(model_prefix) :]
             model_kwargs[key] = value
         else:
             generation_kwargs[key] = value
@@ -56,6 +56,7 @@ def parse_kwargs(kwargs, model_prefix='model_'):
 def predict_summaries(
     model_name_or_path,
     sources,
+    summarizer_class=None,
     max_length=256,
     cache_start=0,
     cache_end=None,
@@ -71,7 +72,11 @@ def predict_summaries(
     )
     cache_end = cache_end if cache_end is not None else len(sources)
     model_kwargs, generation_kwargs = parse_kwargs(kwargs)
-    summarizer = summarizer_for_model(model_name_or_path, **model_kwargs)
+
+    if summarizer_class:
+        summarizer = summarizer_class(model_name_or_path, **model_kwargs)
+    else:
+        summarizer = summarizer_for_model(model_name_or_path, **model_kwargs)
 
     if hasattr(summarizer, "token_statistics"):
         stats = summarizer.token_statistics(sources, max_length=max_length)
@@ -84,7 +89,7 @@ def predict_summaries(
                 text,
                 max_length=max_length,
                 memoizer_ignore_cache=ignore_cache,
-                verbose=idx==0,
+                verbose=idx == 0,
                 **generation_kwargs,
             )
             summaries.append(summary)
