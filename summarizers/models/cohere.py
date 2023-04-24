@@ -84,6 +84,7 @@ class CohereSummarizer(InstructTunedSummarizer):
     def generate_cached(
         model_name_or_path,
         model_input,
+        cache_dir=None,
         memoizer_ignore_cache=False,
         **generation_kwargs,
     ):

@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class Summarizer:
     def __init__(self, model_name) -> None:
         self.model_name = model_name
-        
+
     def __repr__(self):
         attr_dict = self.__dict__.copy()
         attr_dict["default_max_tokens"] = self.default_max_tokens()
@@ -59,19 +59,17 @@ class Summarizer:
     def preprocess(self, text, truncation=True, verbose=False, **generation_kwargs):
         if isinstance(text, list):
             text = "\n".join(text)
-        model_input, generation_kwargs = self.build_input(text, 
-                                                          verbose=verbose, 
-                                                          **generation_kwargs)
-
+        model_input, generation_kwargs = self.build_input(
+            text, verbose=verbose, **generation_kwargs
+        )
+        truncated_tokens = 0
         if truncation:
-            max_tokens = generation_kwargs.get(
-                "max_tokens", self.default_max_tokens()
-            )
+            max_tokens = generation_kwargs.get("max_tokens", self.default_max_tokens())
             log(logger, f"Truncating input to {max_tokens} max tokens", verbose=verbose)
             model_input, truncated_tokens = self.truncate_input(model_input, max_tokens)
 
         return model_input, truncated_tokens, generation_kwargs
-        
+
     def postprocess(self, summary):
         # rougeLSum expects newline after each sentence
         summary = "\n".join([s.strip() for s in sent_tokenize(summary)])
@@ -90,7 +88,8 @@ class Summarizer:
         model_kwargs = self.get_model_kwargs()
         kwargs = model_kwargs.copy()
         log(logger, f"Model kwargs:\n{pformat(kwargs)}", verbose=verbose)
-        log(logger, f"Generation kwargs:\n{pformat(generation_kwargs)}", verbose=verbose)
+        gen_kwargs_str = f"Generation kwargs:\n{pformat(generation_kwargs)}"
+        log(logger, gen_kwargs_str, verbose=verbose)
         kwargs.update(generation_kwargs)
         log(logger, f"Model input:\n{pformat(model_input)}", verbose=verbose)
         summary = self.generate_cached(self.model_name, model_input, **kwargs)
@@ -148,9 +147,9 @@ class PromptBasedSummarizer(Summarizer):
             tokens = tokenizer.encode(text)
             tokens = tokens[:-excess_tokens]
             try:
-                truncated_prompt[longest_idx]["content"] = tokenizer.decode(tokens, 
-                                                                            skip_special_tokens=True, 
-                                                                            clean_up_tokenization_spaces=None)
+                truncated_prompt[longest_idx]["content"] = tokenizer.decode(
+                    tokens, skip_special_tokens=True, clean_up_tokenization_spaces=None
+                )
             except TypeError:
                 truncated_prompt[longest_idx]["content"] = tokenizer.decode(tokens)
 
@@ -175,9 +174,8 @@ class PromptBasedSummarizer(Summarizer):
             system_prompt = self.system_prompt
 
         prompt_args = dict(
-            article=text,
-            num_sentences=num_sentences, 
-            **generation_kwargs)
+            article=text, num_sentences=num_sentences, **generation_kwargs
+        )
         article_prompt = article_prompt.format(**prompt_args)
         prompt = []
 
@@ -205,9 +203,9 @@ class PromptBasedSummarizer(Summarizer):
         return num_tokens
 
     def token_statistics_for_input(self, text, truncation, **generation_kwargs):
-        prompt, truncated_tokens, _ = self.preprocess(text, 
-                                                      truncation=truncation, 
-                                                      **generation_kwargs)
+        prompt, truncated_tokens, _ = self.preprocess(
+            text, truncation=truncation, **generation_kwargs
+        )
         tokenizer_kwargs = self.get_tokenizer_kwargs()
         tokenizer = self.load_tokenizer(self.model_name, **tokenizer_kwargs)
         if not isinstance(prompt, str):
@@ -230,11 +228,12 @@ class PromptBasedSummarizer(Summarizer):
         )
         truncated_tokens = []
         num_tokens = []
-        
+
         with progress:
             for text in texts:
-                result = self.token_statistics_for_input(text, truncation, 
-                                                         **generation_kwargs)
+                result = self.token_statistics_for_input(
+                    text, truncation, **generation_kwargs
+                )
                 num_tokens.append(result[0])
                 truncated_tokens.append(result[1])
                 progress.update(task, advance=1)
@@ -246,7 +245,7 @@ class PromptBasedSummarizer(Summarizer):
             mean_truncation=np.mean(truncated_tokens),
         )
         return stats
-    
+
     def prompt_to_text(self, prompt):
         return "\n".join([m["content"] for m in prompt])
 

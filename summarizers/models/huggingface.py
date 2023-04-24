@@ -44,7 +44,7 @@ class HFSummarizer(Summarizer):
     @property
     def dtype(self):
         return self._dtype
-    
+
     @dtype.setter
     def dtype(self, value):
         if value == "fp16":
@@ -61,7 +61,6 @@ class HFSummarizer(Summarizer):
             logger.warning(f"Unsupported dtype {value}. Setting dtype = 'auto'.")
             dtype = "auto"
         self._dtype = dtype
-        
 
     def get_model_kwargs(self):
         return dict(
@@ -84,9 +83,7 @@ class HFSummarizer(Summarizer):
         if "google/pegasus-x-base" in model_name_or_path:
             model_name_or_path = "google/pegasus-x-base"
 
-        tokenizer = AutoTokenizer.from_pretrained(
-            model_name_or_path, **kwargs
-        )
+        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, **kwargs)
         self.tokenizer = tokenizer
         return tokenizer
 
@@ -95,9 +92,7 @@ class HFSummarizer(Summarizer):
             return self.model_config
 
         try:
-            model_config = AutoConfig.from_pretrained(
-                model_name_or_path, **kwargs
-            )
+            model_config = AutoConfig.from_pretrained(model_name_or_path, **kwargs)
             self.model_config = model_config
         except OSError:
             logger.warning(
@@ -105,7 +100,7 @@ class HFSummarizer(Summarizer):
             )
             self.model_config = AutoConfig()
         return self.model_config
-    
+
     def load_generation_config(self, model_name_or_path, **kwargs):
         if self.generation_config is not None:
             return self.generation_config
@@ -136,21 +131,26 @@ class HFSummarizer(Summarizer):
             max_tokens = config.n_positions
         else:
             max_tokens = 1024
-    
+
         return max_tokens
 
     def infer_device_map(self, model_name_or_path, device_map="auto", max_memory=None):
         # Example: max_memory = {0: "22GiB", "cpu": "30GiB"}
         if max_memory:
-            logger.info(f'Inferring device map for {max_memory}...')
+            logger.info(f"Inferring device map for {max_memory}...")
             with init_empty_weights():
                 model = AutoModelForCausalLM.from_pretrained(model_name_or_path)
-            device_map = infer_auto_device_map(model, max_memory=max_memory, 
-                                               no_split_module_classes=["BloomBlock", 
-                                                                        "OPTDecoderLayer", 
-                                                                        "LLaMADecoderLayer", 
-                                                                        "LlamaDecoderLayer"])
-        logger.info(f'Using device map: {device_map}')
+            device_map = infer_auto_device_map(
+                model,
+                max_memory=max_memory,
+                no_split_module_classes=[
+                    "BloomBlock",
+                    "OPTDecoderLayer",
+                    "LLaMADecoderLayer",
+                    "LlamaDecoderLayer",
+                ],
+            )
+        logger.info(f"Using device map: {device_map}")
         return device_map
 
     @memoize()
@@ -365,7 +365,9 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         if load_in_8bit:
             dtype = torch.int8
 
-        device_map = self.infer_device_map(model_name_or_path, device_map=device_map, max_memory=max_memory)
+        device_map = self.infer_device_map(
+            model_name_or_path, device_map=device_map, max_memory=max_memory
+        )
         model = AutoModelForCausalLM.from_pretrained(
             model_name_or_path,
             cache_dir=cache_dir,
@@ -407,7 +409,7 @@ class InstructText2TextSummarizer(InstructTunedSummarizer, Text2TextSummarizer):
         prompt, truncated_tokens = super().truncate_input(prompt, max_tokens, **kwargs)
         prompt_text = self.prompt_to_text(prompt)
         return prompt_text, truncated_tokens
-    
+
 
 class T5Summarizer(InstructText2TextSummarizer):
     def __init__(self, model_name_or_path, **kwargs) -> None:
@@ -417,7 +419,7 @@ class T5Summarizer(InstructText2TextSummarizer):
         # Adapted from promptsource CNN/DM template:
         # https://github.com/bigscience-workshop/promptsource
         return "Summarize the article in {num_sentences} sentences: {article}"
-    
+
     def default_task_prompt(self):
         return None
 
