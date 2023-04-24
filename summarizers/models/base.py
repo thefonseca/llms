@@ -162,7 +162,8 @@ class PromptBasedSummarizer(Summarizer):
         system_prompt=None,
         article_prompt=None,
         task_prompt=None,
-        num_sentences=6,
+        budget=6,
+        budget_unit="sentences",
         verbose=False,
         **generation_kwargs,
     ):
@@ -173,8 +174,12 @@ class PromptBasedSummarizer(Summarizer):
         if system_prompt is None:
             system_prompt = self.system_prompt
 
+        # a naive way of converting unit to singular...
+        if budget == 1 and budget_unit[-1].lower() == "s":
+            budget_unit = budget_unit[:-1]
+
         prompt_args = dict(
-            article=text, num_sentences=num_sentences, **generation_kwargs
+            article=text, budget=budget, budget_unit=budget_unit, **generation_kwargs
         )
         article_prompt = article_prompt.format(**prompt_args)
         prompt = []
@@ -255,4 +260,4 @@ class InstructTunedSummarizer(PromptBasedSummarizer):
         super().__init__(model_name_or_path, **kwargs)
 
     def default_task_prompt(self):
-        return "Summarize the article above in {num_sentences} sentences."
+        return "Summarize the article above in {budget} {budget_unit}."

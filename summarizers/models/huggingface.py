@@ -418,7 +418,7 @@ class T5Summarizer(InstructText2TextSummarizer):
     def default_article_prompt(self):
         # Adapted from promptsource CNN/DM template:
         # https://github.com/bigscience-workshop/promptsource
-        return "Summarize the article in {num_sentences} sentences: {article}"
+        return "Summarize the article in {budget} {budget_unit}: {article}"
 
     def default_task_prompt(self):
         return None
