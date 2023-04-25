@@ -9,15 +9,16 @@ logger = logging.getLogger(__name__)
 
 
 class Summarizer:
-    def __init__(self, model_name) -> None:
+    def __init__(self, model_name, model_path=None) -> None:
         self.model_name = model_name
+        self.model_path = model_path
 
     def __repr__(self):
         attr_dict = self.__dict__.copy()
         attr_dict["default_max_tokens"] = self.default_max_tokens()
         return f"{self.__class__.__name__}:\n{pformat(attr_dict)}"
 
-    def load_tokenizer(model_name_or_path, **model_kwargs):
+    def load_tokenizer(model_path, **model_kwargs):
         raise NotImplementedError("Method load_tokenizer not implemented.")
 
     def default_max_tokens(self):
@@ -26,15 +27,16 @@ class Summarizer:
 
     def generate_cached(
         self,
-        model_name_or_path,
+        model_name,
         model_input,
+        model_path=None,
         memoizer_ignore_cache=False,
         **generation_kwargs,
     ):
         raise NotImplementedError("Method generate_cached not implemented.")
 
     def get_model_kwargs(self):
-        return {}
+        return dict(model_path=self.model_path)
 
     def get_tokenizer_kwargs(self):
         return {}
@@ -256,8 +258,8 @@ class PromptBasedSummarizer(Summarizer):
 
 
 class InstructTunedSummarizer(PromptBasedSummarizer):
-    def __init__(self, model_name_or_path, **kwargs) -> None:
-        super().__init__(model_name_or_path, **kwargs)
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
 
     def default_task_prompt(self):
         return "Summarize the article above in {budget} {budget_unit}."

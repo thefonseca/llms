@@ -1,4 +1,3 @@
-import getpass
 import os
 
 import openai
@@ -52,13 +51,14 @@ class OpenAISummarizer(InstructTunedSummarizer):
     @staticmethod
     @memoize()
     def generate_cached(
-        model_name_or_path,
+        model_name,
         model_input,
+        model_path=None,
         memoizer_ignore_cache=False,
         **generation_kwargs,
     ):
         response = openai.ChatCompletion.create(
-            model=model_name_or_path, messages=model_input, **generation_kwargs
+            model=model_name, messages=model_input, **generation_kwargs
         )
         return response
 
@@ -66,9 +66,7 @@ class OpenAISummarizer(InstructTunedSummarizer):
         prompt, truncated_tokens, generation_kwargs = super().preprocess(
             text, truncation=truncation, **generation_kwargs
         )
-        max_tokens = generation_kwargs.pop(
-            "max_length", self.default_max_tokens()
-        )
+        max_tokens = generation_kwargs.pop("max_length", self.default_max_tokens())
         generation_kwargs["max_tokens"] = max_tokens
         return prompt, truncated_tokens, generation_kwargs
 

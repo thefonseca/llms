@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class HFSummarizer(Summarizer):
     def __init__(
         self,
-        model_name_or_path,
+        model_name,
         cache_dir=None,
         device_map="auto",
         max_memory=None,
@@ -29,7 +29,7 @@ class HFSummarizer(Summarizer):
         dtype="auto",
         **kwargs,
     ):
-        super().__init__(model_name_or_path, **kwargs)
+        super().__init__(model_name, **kwargs)
         self.cache_dir = cache_dir
         self.device_map = device_map
         self.max_memory = max_memory
@@ -75,44 +75,42 @@ class HFSummarizer(Summarizer):
     def get_tokenizer_kwargs(self):
         return dict(cache_dir=self.cache_dir)
 
-    def load_tokenizer(self, model_name_or_path, **kwargs):
+    def load_tokenizer(self, model_path, **kwargs):
         if self.tokenizer:
             return self.tokenizer
 
-        logger.info(f"Loading tokenizer {model_name_or_path}...")
-        if "google/pegasus-x-base" in model_name_or_path:
-            model_name_or_path = "google/pegasus-x-base"
+        logger.info(f"Loading tokenizer {model_path}...")
+        if "google/pegasus-x-base" in model_path:
+            model_path = "google/pegasus-x-base"
 
-        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, **kwargs)
+        tokenizer = AutoTokenizer.from_pretrained(model_path, **kwargs)
         self.tokenizer = tokenizer
         return tokenizer
 
-    def load_model_config(self, model_name_or_path, **kwargs):
+    def load_model_config(self, model_path, **kwargs):
         if self.model_config is not None:
             return self.model_config
 
         try:
-            model_config = AutoConfig.from_pretrained(model_name_or_path, **kwargs)
+            model_config = AutoConfig.from_pretrained(model_path, **kwargs)
             self.model_config = model_config
         except OSError:
             logger.warning(
-                f"{model_name_or_path} does not appear to have a file named config.json"
+                f"{model_path} does not appear to have a file named config.json"
             )
             self.model_config = AutoConfig()
         return self.model_config
 
-    def load_generation_config(self, model_name_or_path, **kwargs):
+    def load_generation_config(self, model_path, **kwargs):
         if self.generation_config is not None:
             return self.generation_config
 
         try:
-            generation_config = GenerationConfig.from_pretrained(
-                model_name_or_path, **kwargs
-            )
+            generation_config = GenerationConfig.from_pretrained(model_path, **kwargs)
             self.generation_config = generation_config
         except OSError:
             logger.warning(
-                f"{model_name_or_path} does not appear to have a file named generation_config.json"
+                f"{model_path} does not appear to have a file named generation_config.json"
             )
             self.generation_config = GenerationConfig()
         return self.generation_config
@@ -134,12 +132,14 @@ class HFSummarizer(Summarizer):
 
         return max_tokens
 
-    def infer_device_map(self, model_name_or_path, device_map="auto", max_memory=None):
+    def infer_device_map(
+        self, model_path, device_map="auto", max_memory=None, dtype=None
+    ):
         # Example: max_memory = {0: "22GiB", "cpu": "30GiB"}
         if max_memory:
             logger.info(f"Inferring device map for {max_memory}...")
             with init_empty_weights():
-                model = AutoModelForCausalLM.from_pretrained(model_name_or_path)
+                model = AutoModelForCausalLM.from_pretrained(model_path)
             device_map = infer_auto_device_map(
                 model,
                 max_memory=max_memory,
@@ -149,15 +149,17 @@ class HFSummarizer(Summarizer):
                     "LLaMADecoderLayer",
                     "LlamaDecoderLayer",
                 ],
+                dtype=dtype,
             )
         logger.info(f"Using device map: {device_map}")
         return device_map
 
-    @memoize()
+    @memoize(ignore_kwargs=["model_path"])
     def generate_cached(
         self,
-        model_name_or_path,
+        model_name,
         model_input,
+        model_path=None,
         cache_dir=None,
         device_map="auto",
         max_memory=None,
@@ -171,8 +173,11 @@ class HFSummarizer(Summarizer):
         memoizer_ignore_cache=False,
         **generation_kwargs,
     ):
+        if model_path is None:
+            model_path = model_name
+
         model = self.load_model(
-            model_name_or_path,
+            model_path,
             cache_dir=cache_dir,
             device_map=device_map,
             max_memory=max_memory,
@@ -180,10 +185,8 @@ class HFSummarizer(Summarizer):
             load_in_8bit=load_in_8bit,
             dtype=dtype,
         )
-        tokenizer = self.load_tokenizer(model_name_or_path, cache_dir=cache_dir)
-        generation_config = self.load_generation_config(
-            model_name_or_path, cache_dir=cache_dir
-        )
+        tokenizer = self.load_tokenizer(model_path, cache_dir=cache_dir)
+        generation_config = self.load_generation_config(model_path, cache_dir=cache_dir)
 
         with torch.no_grad():
             if isinstance(model_input, str):
@@ -217,12 +220,12 @@ class HFSummarizer(Summarizer):
 
 
 class Text2TextSummarizer(HFSummarizer):
-    def __init__(self, model_name_or_path, **kwargs) -> None:
-        super().__init__(model_name_or_path, **kwargs)
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
 
     def load_model(
         self,
-        model_name_or_path,
+        model_path,
         cache_dir=None,
         device_map="auto",
         max_memory=None,
@@ -234,7 +237,7 @@ class Text2TextSummarizer(HFSummarizer):
         if self.model:
             return self.model
 
-        logger.info(f"Loading model {model_name_or_path}...")
+        logger.info(f"Loading model {model_path}...")
         if load_in_8bit:
             dtype = torch.int8
 
@@ -244,10 +247,12 @@ class Text2TextSummarizer(HFSummarizer):
             device_map = None
             low_cpu_mem_usage = False
         else:
-            device_map = self.infer_device_map(model_name_or_path, max_memory)
+            device_map = self.infer_device_map(
+                model_path, max_memory=max_memory, dtype=dtype
+            )
 
         model = AutoModelForSeq2SeqLM.from_pretrained(
-            model_name_or_path,
+            model_path,
             cache_dir=cache_dir,
             device_map=device_map,
             low_cpu_mem_usage=low_cpu_mem_usage,
@@ -262,7 +267,7 @@ class Text2TextSummarizer(HFSummarizer):
             except:
                 logger.warning("Failed to get cuda device")
 
-        tokenizer = self.load_tokenizer(model_name_or_path, cache_dir=cache_dir)
+        tokenizer = self.load_tokenizer(model_path, cache_dir=cache_dir)
         embedding_size = model.get_input_embeddings().weight.shape[0]
         if len(tokenizer) > embedding_size:
             model.resize_token_embeddings(len(tokenizer))
@@ -344,12 +349,12 @@ class Text2TextSummarizer(HFSummarizer):
 
 
 class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
-    def __init__(self, model_name_or_path, **kwargs) -> None:
-        super().__init__(model_name_or_path, **kwargs)
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
 
     def load_model(
         self,
-        model_name_or_path,
+        model_path,
         cache_dir=None,
         device_map="auto",
         max_memory=None,
@@ -361,15 +366,15 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         if self.model:
             return self.model
 
-        logger.info(f"Loading model {model_name_or_path}...")
+        logger.info(f"Loading model {model_path}...")
         if load_in_8bit:
             dtype = torch.int8
 
         device_map = self.infer_device_map(
-            model_name_or_path, device_map=device_map, max_memory=max_memory
+            model_path, device_map=device_map, max_memory=max_memory, dtype=dtype
         )
         model = AutoModelForCausalLM.from_pretrained(
-            model_name_or_path,
+            model_path,
             cache_dir=cache_dir,
             device_map=device_map,
             low_cpu_mem_usage=low_cpu_mem_usage,
@@ -397,13 +402,13 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
 
 
 class InstructCausalLMSummarizer(InstructTunedSummarizer, CausalLMSummarizer):
-    def __init__(self, model_name_or_path, **kwargs) -> None:
-        super().__init__(model_name_or_path, **kwargs)
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
 
 
 class InstructText2TextSummarizer(InstructTunedSummarizer, Text2TextSummarizer):
-    def __init__(self, model_name_or_path, **kwargs) -> None:
-        super().__init__(model_name_or_path, **kwargs)
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
 
     def truncate_input(self, prompt, max_tokens, **kwargs):
         prompt, truncated_tokens = super().truncate_input(prompt, max_tokens, **kwargs)
@@ -412,8 +417,8 @@ class InstructText2TextSummarizer(InstructTunedSummarizer, Text2TextSummarizer):
 
 
 class T5Summarizer(InstructText2TextSummarizer):
-    def __init__(self, model_name_or_path, **kwargs) -> None:
-        super().__init__(model_name_or_path, **kwargs)
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
 
     def default_article_prompt(self):
         # Adapted from promptsource CNN/DM template:
@@ -425,8 +430,8 @@ class T5Summarizer(InstructText2TextSummarizer):
 
 
 class AlpacaSummarizer(InstructCausalLMSummarizer):
-    def __init__(self, model_name_or_path, **kwargs) -> None:
-        super().__init__(model_name_or_path, **kwargs)
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
 
     def prompt_to_text(self, prompt):
         prompt_text = super().prompt_to_text(prompt)

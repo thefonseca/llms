@@ -82,16 +82,15 @@ class CohereSummarizer(InstructTunedSummarizer):
     @staticmethod
     @memoize()
     def generate_cached(
-        model_name_or_path,
+        model_name,
         model_input,
+        model_path=None,
         cache_dir=None,
         memoizer_ignore_cache=False,
         **generation_kwargs,
     ):
         co = cohere.Client(get_api_key())
-        response = co.summarize(
-            model=model_name_or_path, text=model_input, **generation_kwargs
-        )
+        response = co.summarize(model=model_name, text=model_input, **generation_kwargs)
         return response
 
     def postprocess(self, response):
