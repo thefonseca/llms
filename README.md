@@ -20,8 +20,8 @@ Evaluating [BigBird](https://github.com/google-research/bigbird) on [PubMed](htt
 
 ```bash
 python evaluation.py \
---dataset_path scientific_papers \
---dataset_name pubmed \
+--dataset_name scientific_papers \
+--dataset_config pubmed \
 --split validation \
 --source_key article \
 --target_key abstract \
@@ -35,8 +35,8 @@ Evaluating [Alpaca](https://github.com/tatsu-lab/stanford_alpaca) (float16) on [
 
 ```bash
 python evaluation.py \
---dataset_path scientific_papers \
---dataset_name arxiv \
+--dataset_name scientific_papers \
+--dataset_config arxiv \
 --split validation \
 --source_key article \
 --target_key abstract \
@@ -57,8 +57,8 @@ Evaluating [ChatGPT API](https://platform.openai.com/docs/api-reference/chat) on
 ```bash
 export OPENAI_API_KEY=<your_api_key>
 python evaluation.py \
---dataset_path scientific_papers \
---dataset_name arxiv \
+--dataset_name scientific_papers \
+--dataset_config arxiv \
 --split validation \
 --source_key article \
 --target_key abstract \
@@ -71,8 +71,8 @@ Evaluating summary predictions from a CSV file:
 
 ```bash
 python evaluation.py \
---dataset_path scientific_papers \
---dataset_name arxiv \
+--dataset_name scientific_papers \
+--dataset_config arxiv \
 --split validation \
 --source_key article \
 --target_key abstract \

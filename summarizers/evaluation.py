@@ -220,8 +220,8 @@ def evaluate(
 
 
 def evaluate_model(
-    dataset_path,
     dataset_name,
+    dataset_config=None,
     split="test",
     source_key="article",
     target_key="abstract",
@@ -241,13 +241,15 @@ def evaluate_model(
     **kwargs,
 ):
     if timestr is None:
-        timestr = config_logging(dataset_name, split, output_dir, run_id=run_id)
+        timestr = config_logging(
+            dataset_name, dataset_config, split, output_dir, run_id=run_id
+        )
 
     if model_name is None and prediction_path is None:
         raise ValueError("One of 'model_name' or 'prediction_path' is required")
 
     eval_data = datasets.load_dataset(
-        dataset_path, dataset_name, cache_dir=data_cache_dir
+        dataset_name, dataset_config, cache_dir=data_cache_dir
     )
     eval_data = eval_data[split]
     sources = eval_data[source_key][:max_samples]
@@ -316,6 +318,7 @@ def evaluate_model(
         save_to = get_output_path(
             output_dir,
             dataset_name,
+            dataset_config,
             split,
             model_name=model_name,
             timestr=timestr,

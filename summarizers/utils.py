@@ -91,14 +91,15 @@ def log_scores(name, scores):
             if type(scores[key]) == dict:
                 _scores = []
                 for confidence_key in ["low", "mean", "high"]:
-                    if isinstance(scores[key][confidence_key], np.ndarray) or \
-                        isinstance(scores[key][confidence_key], list):
+                    if isinstance(
+                        scores[key][confidence_key], np.ndarray
+                    ) or isinstance(scores[key][confidence_key], list):
                         score = [f"{x:.3f}" for x in scores[key][confidence_key]]
                         score = f"\n  {confidence_key}: {str(score)}"
                     else:
-                        score = f"{scores[key][confidence_key]:.3f}"               
+                        score = f"{scores[key][confidence_key]:.3f}"
                     _scores.append(score)
-                
+
                 _scores = ", ".join(_scores)
             else:
                 _scores = f"{scores[key]:.3f}"
@@ -166,7 +167,8 @@ def compute_metric(references, candidates, metric_fn, progress=None, **metric_kw
 
 def get_output_path(
     output_dir,
-    dataset,
+    dataset_name,
+    dataset_config,
     split,
     model_name=None,
     timestr=None,
@@ -174,16 +176,17 @@ def get_output_path(
 ):
     save_to = None
     if output_dir:
-        save_subdir = f"{dataset}-{split}"
+        dataset_name = full_dataset_name(dataset_name, dataset_config)
+        save_subdir = f"{dataset_name}-{split}"
         if timestr:
             save_subdir = f"{save_subdir}_{timestr}"
 
         if run_id:
             save_subdir = f"{save_subdir}_{run_id}"
-            
+
         if model_name:
-            save_to = re.sub('[^\w\d]', '_', model_name)
-            save_to = re.sub('^_+', '', save_to)
+            save_to = re.sub("[^\w\d]", "_", model_name)
+            save_to = re.sub("^_+", "", save_to)
             save_to = os.path.join(output_dir, save_subdir, save_to)
         else:
             save_to = os.path.join(output_dir, save_subdir)
@@ -192,17 +195,19 @@ def get_output_path(
 
 def get_log_path(
     log_dir,
-    dataset,
+    dataset_name,
+    dataset_config,
     split,
     timestr=None,
     prefix=None,
     suffix=None,
 ):
     if log_dir:
+        dataset_name = full_dataset_name(dataset_name, dataset_config)
         if prefix:
-            log_path = f"{prefix}-{dataset}-{split}"
+            log_path = f"{prefix}-{dataset_name}-{split}"
         else:
-            log_path = f"{dataset}-{split}"
+            log_path = f"{dataset_name}-{split}"
 
         if timestr:
             log_path = f"{log_path}_{timestr}"
@@ -216,15 +221,29 @@ def get_log_path(
         return log_path
 
 
-def config_logging(dataset_name, split, output_dir, prefix=None, run_id=None):
+def full_dataset_name(dataset_name, dataset_config):
+    if dataset_config:
+        dataset_name = f"{dataset_name}_{dataset_config}"
+    else:
+        dataset_name = dataset_name
+    return dataset_name
+
+
+def config_logging(
+    dataset_name, dataset_config, split, output_dir, prefix=None, run_id=None
+):
     timestr = time.strftime("%Y%m%d-%H%M%S")
-    log_dir = get_output_path(output_dir, dataset_name, split, timestr=timestr, run_id=run_id)
+
+    log_dir = get_output_path(
+        output_dir, dataset_name, dataset_config, split, timestr=timestr, run_id=run_id
+    )
     if log_dir and Path(log_dir).is_dir():
         log_dir = Path(log_dir).parent
 
     log_path = get_log_path(
         log_dir,
         dataset_name,
+        dataset_config,
         split,
         timestr=timestr,
         prefix=prefix,
@@ -239,6 +258,7 @@ def config_logging(dataset_name, split, output_dir, prefix=None, run_id=None):
     )
     logging.getLogger("absl").setLevel(logging.WARNING)
     return timestr
+
 
 def log(logger, message, verbose=False, max_length=300):
     level = logging.INFO if verbose else logging.DEBUG
