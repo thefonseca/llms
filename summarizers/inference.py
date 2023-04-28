@@ -8,6 +8,7 @@ from .models.huggingface import (
     CausalLMSummarizer,
     T5Summarizer,
     AlpacaSummarizer,
+    VicunaSummarizer,
 )
 from .models.openai import OpenAISummarizer
 from .models.cohere import CohereSummarizer
@@ -24,7 +25,7 @@ def summarizer_for_model(model_name, **kwargs):
         "bigscience/T0[_\d\w]*": T5Summarizer,
         "google/flan-t5[-\d\w]+": T5Summarizer,
         ".*alpaca.*": AlpacaSummarizer,
-        ".*vicuna.*": AlpacaSummarizer,
+        ".*vicuna.*": VicunaSummarizer,
         "summarize-((medium)|(xlarge))": CohereSummarizer,
     }
 
@@ -64,23 +65,22 @@ def predict_summaries(
     cache_end=None,
     **kwargs,
 ):
-    if model_path is None:
-        model_path = model_name
     summaries = []
     progress = get_progress_bar()
     task = add_progress_task(
         progress,
-        f"Generating summaries for {model_path}...",
+        f"Generating summaries for {model_name}...",
         total=len(sources),
         existing_ok=False,
     )
     cache_end = cache_end if cache_end is not None else len(sources)
     model_kwargs, generation_kwargs = parse_kwargs(kwargs)
+    model_kwargs["model_path"] = model_path
 
     if summarizer_class:
-        summarizer = summarizer_class(model_path, **model_kwargs)
+        summarizer = summarizer_class(model_name, **model_kwargs)
     else:
-        summarizer = summarizer_for_model(model_path, **model_kwargs)
+        summarizer = summarizer_for_model(model_name, **model_kwargs)
 
     if hasattr(summarizer, "token_statistics"):
         stats = summarizer.token_statistics(sources, max_length=max_length)

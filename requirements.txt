@@ -14,3 +14,4 @@ accelerate==0.17.1
 sentencepiece==0.1.97
 bitsandbytes==0.37.1
 protobuf==3.20.0
+fschat==0.2.3

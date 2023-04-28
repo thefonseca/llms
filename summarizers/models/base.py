@@ -9,16 +9,15 @@ logger = logging.getLogger(__name__)
 
 
 class Summarizer:
-    def __init__(self, model_name, model_path=None) -> None:
+    def __init__(self, model_name) -> None:
         self.model_name = model_name
-        self.model_path = model_path
 
     def __repr__(self):
         attr_dict = self.__dict__.copy()
         attr_dict["default_max_tokens"] = self.default_max_tokens()
         return f"{self.__class__.__name__}:\n{pformat(attr_dict)}"
 
-    def load_tokenizer(model_path, **model_kwargs):
+    def load_tokenizer(**model_kwargs):
         raise NotImplementedError("Method load_tokenizer not implemented.")
 
     def default_max_tokens(self):
@@ -29,21 +28,20 @@ class Summarizer:
         self,
         model_name,
         model_input,
-        model_path=None,
         memoizer_ignore_cache=False,
         **generation_kwargs,
     ):
         raise NotImplementedError("Method generate_cached not implemented.")
 
     def get_model_kwargs(self):
-        return dict(model_path=self.model_path)
+        return {}
 
     def get_tokenizer_kwargs(self):
         return {}
 
     def truncate_input(self, input, max_tokens):
         tokenizer_kwargs = self.get_tokenizer_kwargs()
-        tokenizer = self.load_tokenizer(self.model_name, **tokenizer_kwargs)
+        tokenizer = self.load_tokenizer(**tokenizer_kwargs)
         input = tokenizer.encode(
             input, max_length=max_tokens, truncation=True, padding="max_length"
         )
@@ -143,7 +141,7 @@ class PromptBasedSummarizer(Summarizer):
 
         if excess_tokens > 0:
             tokenizer_kwargs = self.get_tokenizer_kwargs()
-            tokenizer = self.load_tokenizer(self.model_name, **tokenizer_kwargs)
+            tokenizer = self.load_tokenizer(**tokenizer_kwargs)
             truncated_prompt = [dict(item) for item in prompt]
             text = prompt[longest_idx]["content"]
             tokens = tokenizer.encode(text)
@@ -201,7 +199,7 @@ class PromptBasedSummarizer(Summarizer):
 
     def num_tokens_for_prompt(self, messages):
         tokenizer_kwargs = self.get_tokenizer_kwargs()
-        tokenizer = self.load_tokenizer(self.model_name, **tokenizer_kwargs)
+        tokenizer = self.load_tokenizer(**tokenizer_kwargs)
         # account for one newline after each message
         newline_tokens = tokenizer.encode("\n")
         num_tokens = len(newline_tokens) * (len(messages) - 1)
@@ -214,7 +212,7 @@ class PromptBasedSummarizer(Summarizer):
             text, truncation=truncation, **generation_kwargs
         )
         tokenizer_kwargs = self.get_tokenizer_kwargs()
-        tokenizer = self.load_tokenizer(self.model_name, **tokenizer_kwargs)
+        tokenizer = self.load_tokenizer(**tokenizer_kwargs)
         if not isinstance(prompt, str):
             prompt = self.prompt_to_text(prompt)
         num_tokens = len(tokenizer.encode(prompt))

@@ -1,6 +1,7 @@
 import logging
 
 from accelerate import infer_auto_device_map, init_empty_weights
+from fastchat.conversation import get_default_conv_template
 import torch
 from transformers import (
     AutoConfig,
@@ -21,6 +22,7 @@ class HFSummarizer(Summarizer):
     def __init__(
         self,
         model_name,
+        model_path=None,
         cache_dir=None,
         device_map="auto",
         max_memory=None,
@@ -40,6 +42,9 @@ class HFSummarizer(Summarizer):
         self.model = None
         self.model_config = None
         self.generation_config = None
+        self.model_path = model_path
+        if self.model_path is None:
+            self.model_path = model_name
 
     @property
     def dtype(self):
@@ -64,6 +69,7 @@ class HFSummarizer(Summarizer):
 
     def get_model_kwargs(self):
         return dict(
+            model_path=self.model_path,
             cache_dir=self.cache_dir,
             device_map=self.device_map,
             max_memory=self.max_memory,
@@ -75,10 +81,11 @@ class HFSummarizer(Summarizer):
     def get_tokenizer_kwargs(self):
         return dict(cache_dir=self.cache_dir)
 
-    def load_tokenizer(self, model_path, **kwargs):
+    def load_tokenizer(self, **kwargs):
         if self.tokenizer:
             return self.tokenizer
 
+        model_path = self.model_path
         logger.info(f"Loading tokenizer {model_path}...")
         if "google/pegasus-x-base" in model_path:
             model_path = "google/pegasus-x-base"
@@ -116,8 +123,8 @@ class HFSummarizer(Summarizer):
         return self.generation_config
 
     def default_max_tokens(self):
-        config = self.load_model_config(self.model_name, cache_dir=self.cache_dir)
-        if "google/bigbird-pegasus-large" in self.model_name:
+        config = self.load_model_config(self.model_path, cache_dir=self.cache_dir)
+        if "google/bigbird-pegasus-large" in self.model_path:
             max_tokens = 3072
         elif hasattr(config, "max_position_embeddings"):
             max_tokens = config.max_position_embeddings
@@ -185,7 +192,7 @@ class HFSummarizer(Summarizer):
             load_in_8bit=load_in_8bit,
             dtype=dtype,
         )
-        tokenizer = self.load_tokenizer(model_path, cache_dir=cache_dir)
+        tokenizer = self.load_tokenizer(cache_dir=cache_dir)
         generation_config = self.load_generation_config(model_path, cache_dir=cache_dir)
 
         with torch.no_grad():
@@ -242,7 +249,7 @@ class Text2TextSummarizer(HFSummarizer):
             dtype = torch.int8
 
         if any(
-            [x in self.model_name] for x in ["google/pegasus", "google/bigbird-pegasus"]
+            [x in self.model_path] for x in ["google/pegasus", "google/bigbird-pegasus"]
         ):
             device_map = None
             low_cpu_mem_usage = False
@@ -267,7 +274,7 @@ class Text2TextSummarizer(HFSummarizer):
             except:
                 logger.warning("Failed to get cuda device")
 
-        tokenizer = self.load_tokenizer(model_path, cache_dir=cache_dir)
+        tokenizer = self.load_tokenizer(cache_dir=cache_dir)
         embedding_size = model.get_input_embeddings().weight.shape[0]
         if len(tokenizer) > embedding_size:
             model.resize_token_embeddings(len(tokenizer))
@@ -281,7 +288,7 @@ class Text2TextSummarizer(HFSummarizer):
         return model
 
     def truncate_input(self, input, max_tokens, **kwargs):
-        tokenizer = self.load_tokenizer(self.model_name, cache_dir=self.cache_dir)
+        tokenizer = self.load_tokenizer(cache_dir=self.cache_dir)
         input = tokenizer(
             [input],
             padding="max_length",
@@ -316,7 +323,7 @@ class Text2TextSummarizer(HFSummarizer):
         )
         if max_length is None:
             generation_config = self.load_generation_config(
-                self.model_name, self.cache_dir
+                self.model_path, self.cache_dir
             )
             if hasattr("max_length", generation_config):
                 max_length = generation_config.max_length
@@ -325,7 +332,7 @@ class Text2TextSummarizer(HFSummarizer):
         if do_sample is None:
             generation_kwargs["do_sample"] = False
 
-        config = self.load_model_config(self.model_name, cache_dir=self.cache_dir)
+        config = self.load_model_config(self.model_path, cache_dir=self.cache_dir)
         if hasattr(config, "task_specific_params"):
             task_params = config.task_specific_params
             if task_params and "summarization" in task_params:
@@ -341,7 +348,7 @@ class Text2TextSummarizer(HFSummarizer):
     def postprocess(self, summary):
         # special newline postprocessing for some models
         if any(
-            [x in self.model_name] for x in ["google/pegasus", "google/bigbird-pegasus"]
+            [x in self.model_path] for x in ["google/pegasus", "google/bigbird-pegasus"]
         ):
             summary = summary.replace(".<n> ", ".\n ")
         summary = super().postprocess(summary)
@@ -440,4 +447,17 @@ class AlpacaSummarizer(InstructCausalLMSummarizer):
             "Write a response that appropriately completes the request.\n\n"
             "### Instruction:\n{}\n\n### Response:"
         ).format(prompt_text)
+        return prompt_text
+
+
+class VicunaSummarizer(InstructCausalLMSummarizer):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
+
+    def prompt_to_text(self, prompt):
+        prompt_text = super().prompt_to_text(prompt)
+        conv = get_default_conv_template("vicuna").copy()
+        conv.append_message(conv.roles[0], prompt_text)
+        conv.append_message(conv.roles[1], None)
+        prompt_text = conv.get_prompt()
         return prompt_text

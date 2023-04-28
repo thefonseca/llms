@@ -12,14 +12,13 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 class OpenAISummarizer(InstructTunedSummarizer):
     def __init__(self, model_name, request_interval=30, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
-        self.tokenizer = self.load_tokenizer(model_name)
+        self.tokenizer = self.load_tokenizer()
         # wait an interval in seconds between requests
         self.request_interval = request_interval
 
-    @staticmethod
-    def load_tokenizer(model_name, **kwargs):
+    def load_tokenizer(self, **kwargs):
         try:
-            encoding = tiktoken.encoding_for_model(model_name)
+            encoding = tiktoken.encoding_for_model(self.model_name)
         except KeyError:
             encoding = tiktoken.get_encoding("cl100k_base")
         return encoding
