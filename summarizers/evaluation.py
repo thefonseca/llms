@@ -17,7 +17,11 @@ from .utils import (
     compute_metric,
     config_logging,
     get_output_path,
+    is_csv_file,
+    load_from_arxiv,
     log_scores,
+    match_arxiv,
+    remove_abstract,
     sent_tokenize,
     word_tokenize,
 )
@@ -248,10 +252,24 @@ def evaluate_model(
     if model_name is None and prediction_path is None:
         raise ValueError("One of 'model_name' or 'prediction_path' is required")
 
-    eval_data = datasets.load_dataset(
-        dataset_name, dataset_config, cache_dir=data_cache_dir
-    )
-    eval_data = eval_data[split]
+    arxiv_id = match_arxiv(dataset_name)
+    if arxiv_id:
+        arxiv_sample = load_from_arxiv(arxiv_id)
+        text = arxiv_sample["text"]
+        abstract = arxiv_sample["summary"]
+        text = remove_abstract(text, abstract)
+        eval_data = {
+            source_key: [text],
+            target_key: [abstract],
+        }
+    elif is_csv_file(dataset_name):
+        eval_data = datasets.load_dataset("csv", data_files=dataset_name)
+    else:
+        eval_data = datasets.load_dataset(
+            dataset_name, dataset_config, cache_dir=data_cache_dir
+        )
+        eval_data = eval_data[split]
+
     sources = eval_data[source_key][:max_samples]
     targets = eval_data[target_key][:max_samples]
 
@@ -265,9 +283,6 @@ def evaluate_model(
         model_names.extend(prediction_path)
     elif prediction_path:
         model_names.append(prediction_path)
-
-    def is_csv_file(path):
-        return os.path.exists(path) and path[-4:].lower() == ".csv"
 
     for model_name in model_names:
         logger.info(f"Evaluating {model_name}")

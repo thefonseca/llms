@@ -1,14 +1,18 @@
 import os
 from pathlib import Path
+import json
 import logging
 import re
 import time
 
+import arxiv
+from .fulltext import convert
 import nltk
 import numpy as np
 from rich.logging import RichHandler
 from rich.progress import Progress, MofNCompleteColumn, SpinnerColumn
 from scipy.stats import bootstrap
+import textdistance
 
 
 try:
@@ -17,6 +21,12 @@ except:
     nltk.download("punkt", quiet=True)
 
 logger = logging.getLogger(__name__)
+
+
+def get_cache_dir(key):
+    home_dir = os.getenv("HOME", ".")
+    cache_dir = os.path.join(home_dir, ".cache", "summarizers", key)
+    return cache_dir
 
 
 def get_progress_bar(**kwargs):
@@ -265,3 +275,87 @@ def log(logger, message, verbose=False, max_length=300):
     if max_length and len(message) > max_length:
         message = f"{message[:max_length//2]} ... {message[-max_length//2:]}"
     logger.log(level, message)
+
+
+def is_csv_file(path):
+    return os.path.exists(path) and path[-4:].lower() == ".csv"
+
+
+def match_arxiv(path):
+    pattern = "(?:(?:https://)?(?:arxiv.org)(?:\/\w+\/))?(\d{4}\.\d{4,5}(v\d*)?)"
+    match = re.match(pattern, path)
+    if match:
+        return match.groups()[0]
+
+
+def load_from_arxiv(arxiv_id, arxiv_path=None):
+    if arxiv_path is None:
+        arxiv_path = get_cache_dir("arxiv")
+    metadata_filename = f"{arxiv_id}.json"
+    metadata_dir = os.path.join(arxiv_path, "metadata")
+    metadata_path = os.path.join(metadata_dir, metadata_filename)
+    updated_paper = False
+
+    os.makedirs(metadata_dir, exist_ok=True)
+    if os.path.exists(metadata_path):
+        with open(metadata_path, "r") as fh:
+            paper_dict = json.load(fh)
+    else:
+        paper = next(arxiv.Search(id_list=[arxiv_id]).results())
+        paper_dict = dict(
+            entry_id=paper.entry_id,
+            updated=paper.updated.strftime("%m/%d/%Y, %H:%M:%S"),
+            published=paper.published.strftime("%m/%d/%Y, %H:%M:%S"),
+            title=paper.title,
+            authors=[str(x) for x in paper.authors],
+            summary=paper.summary,
+            comment=paper.comment,
+            journal_ref=paper.journal_ref,
+            doi=paper.doi,
+            primary_category=paper.primary_category,
+            categories=paper.categories,
+            links=[str(x) for x in paper.links],
+            pdf_url=paper.pdf_url,
+        )
+        updated_paper = True
+
+    pdf_filename = f"{arxiv_id}.pdf"
+    pdf_dir = os.path.join(arxiv_path, "pdfs")
+    pdf_path = os.path.join(pdf_dir, pdf_filename)
+    os.makedirs(pdf_dir, exist_ok=True)
+
+    if not os.path.exists(pdf_path):
+        # Download the PDF to a specified directory with a custom filename.
+        paper.download_pdf(dirpath=pdf_dir, filename=pdf_filename)
+
+    txt_filename = f"{arxiv_id}.txt"
+    txt_path = os.path.join(pdf_dir, txt_filename)
+
+    if not os.path.exists(txt_path) or "text" not in paper_dict:
+        updated_paper = True
+        outpath = convert(pdf_path)
+        with open(outpath) as fh:
+            text = fh.readlines()
+            paper_dict["text"] = text
+
+    if updated_paper:
+        with open(metadata_path, "w") as fh:
+            json.dump(paper_dict, fh)
+
+    return paper_dict
+
+
+def remove_abstract(text, abstract):
+    if isinstance(text, list):
+        text = "".join(text)
+    paragraphs = text.split("\n\n")
+    abstract_idx = None
+    abstract = abstract.split(" ")
+    for idx, par in enumerate(paragraphs):
+        dist = textdistance.lcsseq.distance(par.split(" "), abstract)
+        if dist < 0:
+            abstract_idx = idx
+        elif abstract_idx:
+            break
+    text = paragraphs[abstract_idx + 1 :]
+    return text
