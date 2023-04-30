@@ -98,7 +98,7 @@ def run_pdf2txt(pdffile: str, timelimit: int = TIMELIMIT, options: str = ""):
     )
     cmd = shlex.split(cmd)
     output = check_output(cmd, timeout=timelimit)
-    log.info(output)
+    # log.info(output)
 
     with open(tmpfile) as f:
         return f.read()

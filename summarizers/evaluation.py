@@ -3,6 +3,7 @@ import logging
 import os
 import pathlib
 
+from arxiv import SortCriterion
 import datasets
 import fire
 import numpy as np
@@ -10,6 +11,7 @@ import pandas as pd
 from p_tqdm import p_map
 from rouge_score import scoring
 
+from .arxiv import search_arxiv
 from .inference import predict_summaries
 from .metrics import summarization_metrics
 from .utils import (
@@ -18,10 +20,7 @@ from .utils import (
     config_logging,
     get_output_path,
     is_csv_file,
-    load_from_arxiv,
     log_scores,
-    match_arxiv,
-    remove_abstract,
     sent_tokenize,
     word_tokenize,
 )
@@ -224,11 +223,13 @@ def evaluate(
 
 
 def evaluate_model(
-    dataset_name,
+    dataset_name=None,
     dataset_config=None,
-    split="test",
+    split=None,
     source_key="article",
     target_key="abstract",
+    arxiv_id=None,
+    arxiv_query=None,
     model_name=None,
     summarizer_class=None,
     prediction_path=None,
@@ -244,24 +245,46 @@ def evaluate_model(
     seed=17,
     **kwargs,
 ):
+    if arxiv_id or arxiv_query:
+        dataset_name = "arxiv-api"
+
     if timestr is None:
         timestr = config_logging(
             dataset_name, dataset_config, split, output_dir, run_id=run_id
         )
 
-    if model_name is None and prediction_path is None:
-        raise ValueError("One of 'model_name' or 'prediction_path' is required")
+    if all(x is None for x in [dataset_name, arxiv_id, arxiv_query]):
+        raise ValueError(
+            "Plese specify one of 'dataset_name', 'arxiv_id' or 'arxiv_query'"
+        )
 
-    arxiv_id = match_arxiv(dataset_name)
-    if arxiv_id:
-        arxiv_sample = load_from_arxiv(arxiv_id)
-        text = arxiv_sample["text"]
-        abstract = arxiv_sample["summary"]
-        text = remove_abstract(text, abstract)
+    if model_name is None and prediction_path is None:
+        raise ValueError("Please specify one of 'model_name' or 'prediction_path'")
+
+    if arxiv_id or arxiv_query:
+        logger.info(f"Arxiv IDs: {arxiv_id}")
+        logger.info(f"Arxiv query: {arxiv_query}")
+        papers = search_arxiv(
+            arxiv_id,
+            arxiv_query,
+            max_samples,
+            sort_by=SortCriterion.SubmittedDate,
+            remove_abstract=True,
+        )
         eval_data = {
-            source_key: [text],
-            target_key: [abstract],
+            source_key: [p["text"] for p in papers],
+            target_key: [p["summary"] for p in papers],
         }
+        save_to = get_output_path(
+            output_dir,
+            dataset_name,
+            dataset_config,
+            timestr=timestr,
+            run_id=run_id,
+        )
+        arxiv_ids_path = os.path.join(save_to, "arxiv-ids.txt")
+        np.savetxt(arxiv_ids_path, [p["entry_id"] for p in papers], fmt="%s")
+
     elif is_csv_file(dataset_name):
         eval_data = datasets.load_dataset("csv", data_files=dataset_name)
     else:
