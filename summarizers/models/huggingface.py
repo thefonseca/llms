@@ -22,7 +22,7 @@ class HFSummarizer(Summarizer):
     def __init__(
         self,
         model_name,
-        model_path=None,
+        checkpoint_path=None,
         cache_dir=None,
         device_map="auto",
         max_memory=None,
@@ -42,7 +42,7 @@ class HFSummarizer(Summarizer):
         self.model = None
         self.model_config = None
         self.generation_config = None
-        self.model_path = model_path
+        self.model_path = checkpoint_path
         if self.model_path is None:
             self.model_path = model_name
 

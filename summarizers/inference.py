@@ -58,7 +58,6 @@ def parse_kwargs(kwargs, model_prefix="model_"):
 def predict_summaries(
     model_name,
     sources,
-    model_path=None,
     summarizer_class=None,
     max_length=256,
     cache_start=0,
@@ -75,7 +74,6 @@ def predict_summaries(
     )
     cache_end = cache_end if cache_end is not None else len(sources)
     model_kwargs, generation_kwargs = parse_kwargs(kwargs)
-    model_kwargs["model_path"] = model_path
 
     if summarizer_class:
         summarizer = summarizer_class(model_name, **model_kwargs)
