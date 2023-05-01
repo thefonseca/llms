@@ -282,3 +282,11 @@ def log(logger, message, verbose=False, max_length=300):
 
 def is_csv_file(path):
     return os.path.exists(path) and path[-4:].lower() == ".csv"
+
+
+def is_json_file(path):
+    return os.path.exists(path) and path[-5:].lower() == ".json"
+
+
+def is_txt_file(path):
+    return os.path.exists(path) and path[-4:].lower() == ".txt"

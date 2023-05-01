@@ -81,8 +81,8 @@ def remove_article_abstract(text, abstract):
             break
     if abstract_idx:
         text = paragraphs[abstract_idx + 1 :]
+        text = "\n\n".join(text)
     else:
-        logger.warning(f"Could not find abstract in text:\n{text[:500]}...")
         text = None
     return text
 
@@ -110,17 +110,24 @@ def load_arxiv_article(
     txt_path = os.path.join(pdf_dir, txt_filename)
 
     if not os.path.exists(txt_path) or "text" not in metadata:
-        outpath = convert(pdf_path)
-        with open(outpath) as fh:
-            text = fh.readlines()
-            metadata["text"] = text
+        try:
+            outpath = convert(pdf_path)
+            with open(outpath) as fh:
+                text = fh.readlines()
+                metadata["text"] = text
+        except RuntimeError as err:
+            logger.error(f"Error converting PDF: {pdf_path}")
+            logger.error(str(err))
+            metadata["text"] = None
 
         metadata_path = arxiv_metadata_path(arxiv_id, arxiv_path)
         with open(metadata_path, "w") as fh:
             json.dump(metadata, fh)
 
-    if remove_abstract:
+    if metadata["text"] and remove_abstract:
         text = remove_article_abstract(metadata["text"], metadata["summary"])
+        if text is None:
+            logger.warning(f"Could not find abstract in article {arxiv_id}")
         metadata["text"] = text
 
     return metadata
@@ -160,13 +167,13 @@ def search_arxiv(
         progress = get_progress_bar()
         task = add_progress_task(
             progress,
-            f"Downloading articles from arXiv...",
+            f"Loading articles from arXiv...",
             total=len(results),
             existing_ok=False,
         )
         with progress:
             for result in results:
-                progress.update(task, description=f"Downloading {result.entry_id}...")
+                progress.update(task, description=f"Loading {result.entry_id}...")
                 paper = load_arxiv_article(
                     paper=result, remove_abstract=remove_abstract
                 )

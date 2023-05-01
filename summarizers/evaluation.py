@@ -20,6 +20,8 @@ from .utils import (
     config_logging,
     get_output_path,
     is_csv_file,
+    is_json_file,
+    is_txt_file,
     log_scores,
     sent_tokenize,
     word_tokenize,
@@ -222,6 +224,31 @@ def evaluate(
     return results["scores"]
 
 
+def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
+    logger.info(f"Arxiv IDs: {arxiv_id}")
+    logger.info(f"Arxiv query: {arxiv_query}")
+    if arxiv_id and is_txt_file(arxiv_id):
+        arxiv_ids_file = arxiv_id
+        arxiv_id = np.loadtxt(arxiv_ids_file)
+        logger.info(f"Loaded {len(arxiv_id)} arXiv IDs from {arxiv_ids_file}")
+        print(arxiv_id)
+
+    papers = search_arxiv(
+        arxiv_id,
+        arxiv_query,
+        # add 10% more samples as some of them will not be valid
+        max_results=int(max_samples * 1.1),
+        sort_by=SortCriterion.SubmittedDate,
+        remove_abstract=True,
+    )
+    eval_data = {
+        "entry_id": [p["entry_id"] for p in papers],
+        source_key: [p["text"] for p in papers],
+        target_key: [p["summary"] for p in papers],
+    }
+    return eval_data
+
+
 def evaluate_model(
     dataset_name=None,
     dataset_config=None,
@@ -262,19 +289,9 @@ def evaluate_model(
         raise ValueError("Please specify one of 'model_name' or 'prediction_path'")
 
     if arxiv_id or arxiv_query:
-        logger.info(f"Arxiv IDs: {arxiv_id}")
-        logger.info(f"Arxiv query: {arxiv_query}")
-        papers = search_arxiv(
-            arxiv_id,
-            arxiv_query,
-            max_samples,
-            sort_by=SortCriterion.SubmittedDate,
-            remove_abstract=True,
+        eval_data = load_arxiv_data(
+            arxiv_id, arxiv_query, max_samples, source_key, target_key
         )
-        eval_data = {
-            source_key: [p["text"] for p in papers],
-            target_key: [p["summary"] for p in papers],
-        }
         save_to = get_output_path(
             output_dir,
             dataset_name,
@@ -282,11 +299,14 @@ def evaluate_model(
             timestr=timestr,
             run_id=run_id,
         )
-        arxiv_ids_path = os.path.join(save_to, "arxiv-ids.txt")
-        np.savetxt(arxiv_ids_path, [p["entry_id"] for p in papers], fmt="%s")
-
+        arxiv_data_path = os.path.join(save_to, "arxiv-data.json")
+        pd.DataFrame(eval_data).to_json(arxiv_data_path)
+    elif is_json_file(dataset_name):
+        eval_data = pd.read_json(dataset_name)
+        logger.info(f"Loaded {len(eval_data)} samples from {dataset_name}")
     elif is_csv_file(dataset_name):
-        eval_data = datasets.load_dataset("csv", data_files=dataset_name)
+        eval_data = pd.read_csv(dataset_name)
+        logger.info(f"Loaded {len(eval_data)} samples from {dataset_name}")
     else:
         eval_data = datasets.load_dataset(
             dataset_name, dataset_config, cache_dir=data_cache_dir
