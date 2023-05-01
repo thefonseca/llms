@@ -231,16 +231,21 @@ def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
         arxiv_ids_file = arxiv_id
         arxiv_id = np.loadtxt(arxiv_ids_file)
         logger.info(f"Loaded {len(arxiv_id)} arXiv IDs from {arxiv_ids_file}")
-        print(arxiv_id)
+
+    if max_samples is None:
+        max_samples = float("inf")
+    else:
+        max_samples = int(max_samples * 1.1)
 
     papers = search_arxiv(
         arxiv_id,
         arxiv_query,
         # add 10% more samples as some of them will not be valid
-        max_results=int(max_samples * 1.1),
+        max_results=max_samples,
         sort_by=SortCriterion.SubmittedDate,
         remove_abstract=True,
     )
+    print([p["text"] for p in papers])
     eval_data = {
         "entry_id": [p["entry_id"] for p in papers],
         source_key: [p["text"] for p in papers],
@@ -299,8 +304,10 @@ def evaluate_model(
             timestr=timestr,
             run_id=run_id,
         )
-        arxiv_data_path = os.path.join(save_to, "arxiv-data.json")
-        pd.DataFrame(eval_data).to_json(arxiv_data_path)
+        if save_to:
+            arxiv_data_path = os.path.join(save_to, "arxiv-data.json")
+            pd.DataFrame(eval_data).to_json(arxiv_data_path)
+
     elif is_json_file(dataset_name):
         eval_data = pd.read_json(dataset_name)
         logger.info(f"Loaded {len(eval_data)} samples from {dataset_name}")

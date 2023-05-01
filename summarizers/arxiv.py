@@ -51,20 +51,22 @@ def arxiv_metadata_path(arxiv_id, arxiv_path, create_dir=False):
 def load_arxiv_metadata(arxiv_id, arxiv_path, paper=None):
     metadata = None
     if arxiv_id:
+        arxiv_id = match_arxiv_id(arxiv_id)
         metadata_path = arxiv_metadata_path(arxiv_id, arxiv_path, create_dir=True)
         if os.path.exists(metadata_path):
             with open(metadata_path, "r") as fh:
                 metadata = json.load(fh)
-    else:
-        if paper is None:
+        else:
             paper = next(arxiv.Search(id_list=[arxiv_id]).results())
+
+    if paper:
         metadata = arxiv_paper_to_dict(paper)
         arxiv_id = match_arxiv_id(metadata["entry_id"])
         metadata_path = arxiv_metadata_path(arxiv_id, arxiv_path, create_dir=True)
         with open(metadata_path, "w") as fh:
             json.dump(metadata, fh)
 
-    return metadata
+    return metadata, paper
 
 
 def remove_article_abstract(text, abstract):
@@ -93,7 +95,7 @@ def load_arxiv_article(
     if arxiv_path is None:
         arxiv_path = get_cache_dir("arxiv")
 
-    metadata = load_arxiv_metadata(arxiv_id, arxiv_path, paper=paper)
+    metadata, paper = load_arxiv_metadata(arxiv_id, arxiv_path, paper=paper)
     arxiv_id = match_arxiv_id(metadata["entry_id"])
     if arxiv_id is None:
         raise ValueError(f"Error matching paper id: {metadata['entry_id']}")
@@ -104,6 +106,8 @@ def load_arxiv_article(
     os.makedirs(pdf_dir, exist_ok=True)
 
     if not os.path.exists(pdf_path):
+        if paper is None:
+            paper = next(arxiv.Search(id_list=[arxiv_id]).results())
         paper.download_pdf(dirpath=pdf_dir, filename=pdf_filename)
 
     txt_filename = f"{arxiv_id}.txt"

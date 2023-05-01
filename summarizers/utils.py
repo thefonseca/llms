@@ -235,6 +235,7 @@ def get_log_path(
 
 
 def full_dataset_name(dataset_name, dataset_config):
+    dataset_name = Path(dataset_name).stem
     if dataset_config:
         dataset_name = f"{dataset_name}_{dataset_config}"
     else:
