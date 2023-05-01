@@ -12,14 +12,14 @@ Currently, these functionalities are available:
 ## Setup
 ```bash
 git clone https://github.com/thefonseca/summarizers.git
-cd summarizers && pip install -r requirements.txt
+cd summarizers && pip install -e .
 ```
 
 ## Examples
 Evaluating [BigBird](https://github.com/google-research/bigbird) on [PubMed](https://huggingface.co/datasets/scientific_papers) validation split, and saving the results on the `output` folder:
 
 ```bash
-python evaluation.py \
+python -m summarizers.evaluation \
 --dataset_name scientific_papers \
 --dataset_config pubmed \
 --split validation \
@@ -34,14 +34,10 @@ where `--model_name` is a [huggingface model identifier](https://huggingface.co/
 Evaluating [Alpaca](https://github.com/tatsu-lab/stanford_alpaca) (float16) on [arXiv](https://huggingface.co/datasets/scientific_papers) validation split:
 
 ```bash
-python evaluation.py \
---dataset_name scientific_papers \
---dataset_config arxiv \
---split validation \
---source_key article \
---target_key abstract \
---max_samples 1000 \
---model_name path_to_alpaca_checkpoint \
+python -m summarizers.evaluation \
+--arxiv_id https://arxiv.org/abs/2304.15004v1 \
+--model_name alpaca-7b \
+--model_checkpoint_path path_to_alpaca_checkpoint \
 --budget 7 \
 --budget_unit sentences \
 --model_dtype fp16 \
@@ -49,14 +45,15 @@ python evaluation.py \
 ```
 
 Notes:
-- `budgetbudget` controls length of instruct-tuned summaries (by default, in sentences).
-- `path_to_alpaca_checkpoint` has to contain the string "alpaca" so that the correct summarizer class `AlpacaSummarizer` is used.
+- `--budget` controls length of instruct-tuned summaries (by default, in sentences).
+- `--model_checkpoint_path` allows changing checkpoint folder while keeping the cache
+key (`--model_name`) constant.
 
 Evaluating [ChatGPT API](https://platform.openai.com/docs/api-reference/chat) on [arXiv](https://huggingface.co/datasets/scientific_papers) validation split:
 
 ```bash
 export OPENAI_API_KEY=<your_api_key>
-python evaluation.py \
+python -m summarizers.evaluation \
 --dataset_name scientific_papers \
 --dataset_config arxiv \
 --split validation \
@@ -70,7 +67,7 @@ python evaluation.py \
 Evaluating summary predictions from a CSV file:
 
 ```bash
-python evaluation.py \
+python -m summarizers.evaluation \
 --dataset_name scientific_papers \
 --dataset_config arxiv \
 --split validation \
@@ -81,3 +78,4 @@ python evaluation.py \
 --max_samples 1000 \
 --output_dir output
 ```
+s
