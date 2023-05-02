@@ -78,4 +78,3 @@ python -m summarizers.evaluation \
 --max_samples 1000 \
 --output_dir output
 ```
-s
