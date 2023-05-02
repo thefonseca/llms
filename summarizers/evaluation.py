@@ -245,7 +245,6 @@ def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
         sort_by=SortCriterion.SubmittedDate,
         remove_abstract=True,
     )
-    print([p["text"] for p in papers])
     eval_data = {
         "entry_id": [p["entry_id"] for p in papers],
         source_key: [p["text"] for p in papers],
