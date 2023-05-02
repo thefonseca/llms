@@ -52,7 +52,6 @@ class OpenAISummarizer(InstructTunedSummarizer):
     def generate_cached(
         model_name,
         model_input,
-        model_path=None,
         memoizer_ignore_cache=False,
         **generation_kwargs,
     ):
