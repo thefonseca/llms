@@ -273,7 +273,6 @@ def evaluate_model(
     metrics=None,
     run_id=None,
     timestr=None,
-    seed=17,
     **kwargs,
 ):
     if arxiv_id or arxiv_query:
@@ -388,6 +387,7 @@ def evaluate_model(
             timestr=timestr,
             run_id=run_id,
         )
+        seed = kwargs.get("seed", 17)
         evaluate(
             preds,
             targets,

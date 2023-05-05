@@ -176,10 +176,14 @@ class HFSummarizer(Summarizer):
         do_sample=True,
         temperature=0.8,
         top_p=0.95,
+        seed=42,
         keep_generated_only=False,
         memoizer_ignore_cache=False,
         **generation_kwargs,
     ):
+        if seed is not None:
+            torch.manual_seed(seed)
+
         if model_path is None:
             model_path = model_name
 
