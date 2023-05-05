@@ -260,4 +260,4 @@ class InstructTunedSummarizer(PromptBasedSummarizer):
         super().__init__(model_name, **kwargs)
 
     def default_task_prompt(self):
-        return "Summarize the article above in {budget} {budget_unit}."
+        return "Write a summary for the article above in {budget} {budget_unit}."
