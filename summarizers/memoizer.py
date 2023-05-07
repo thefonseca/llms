@@ -17,7 +17,10 @@ class Constants:
     CACHE_MISS = 0
     DEFAULT_CACHE_DIR = "."
     DEFAULT_CACHE_SIZE = int(40e9)
+
+
 constants = Constants()
+
 
 def get_cache_dir():
     cache_dir = os.getenv("MEMOIZER_HOME")
@@ -108,7 +111,6 @@ def memoize(
         )
 
     def _memoize(func):
-
         if (
             randomized_function
         ):  # randomized function have seed and generator parameters

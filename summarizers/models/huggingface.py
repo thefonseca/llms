@@ -432,9 +432,7 @@ class T5Summarizer(InstructText2TextSummarizer):
         super().__init__(model_name, **kwargs)
 
     def default_article_prompt(self):
-        # Adapted from promptsource CNN/DM template:
-        # https://github.com/bigscience-workshop/promptsource
-        return "Summarize the article in {budget} {budget_unit}: {article}"
+        return "summarize: {article}"
 
     def default_task_prompt(self):
         return None
