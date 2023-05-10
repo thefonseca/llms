@@ -127,11 +127,18 @@ def aggregate_scores(scores):
     for score in scores:
         for key in score.keys():
             key_scores = agg_scores.get(key, [])
-            _score = score[key]
-            if isinstance(_score, list) and len(_score) == 1:
-                _score = _score[0]
-            key_scores.append(_score)
             agg_scores[key] = key_scores
+
+            _score = score[key]
+            if isinstance(_score, list):
+                if np.any(np.isinf(_score)):
+                    continue
+                if len(_score) == 1:
+                    _score = _score[0]
+            elif np.isinf(_score):
+                continue
+
+            key_scores.append(_score)
 
     confidence_intervals = {}
     for key in agg_scores.keys():
