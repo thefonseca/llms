@@ -142,20 +142,21 @@ def aggregate_scores(scores):
 
     confidence_intervals = {}
     for key in agg_scores.keys():
-        ci = bootstrap(
-            (agg_scores[key],),
-            np.mean,
-            vectorized=True,
-            axis=0,
-            confidence_level=0.95,
-            random_state=17,
-            method="BCa",
-        )
-        confidence_intervals[key] = {
-            "low": ci.confidence_interval.low.tolist(),
-            "high": ci.confidence_interval.high.tolist(),
-            "mean": np.mean(agg_scores[key], axis=0).tolist(),
-        }
+        if len(agg_scores[key]):
+            ci = bootstrap(
+                (agg_scores[key],),
+                np.mean,
+                vectorized=True,
+                axis=0,
+                confidence_level=0.95,
+                random_state=17,
+                method="BCa",
+            )
+            confidence_intervals[key] = {
+                "low": ci.confidence_interval.low.tolist(),
+                "high": ci.confidence_interval.high.tolist(),
+                "mean": np.mean(agg_scores[key], axis=0).tolist(),
+            }
 
     return confidence_intervals
 
