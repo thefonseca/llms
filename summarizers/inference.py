@@ -28,6 +28,7 @@ def summarizer_for_model(model_name, **kwargs):
         ".*alpaca.*": AlpacaSummarizer,
         ".*vicuna.*": VicunaSummarizer,
         "summarize-((medium)|(xlarge))": CohereSummarizer,
+        "mosaicml/mpt[-\d\w]+": CausalLMSummarizer,
     }
 
     for key, val in summarizer_map.items():
@@ -63,6 +64,7 @@ def predict_summaries(
     max_length=256,
     cache_start=0,
     cache_end=None,
+    ignore_errors=False,
     **kwargs,
 ):
     summaries = []
@@ -88,13 +90,22 @@ def predict_summaries(
     with progress:
         for idx, text in enumerate(sources):
             ignore_cache = idx < cache_start or idx >= cache_end
-            summary = summarizer.generate(
-                text,
-                max_length=max_length,
-                memoizer_ignore_cache=ignore_cache,
-                verbose=idx == 0,
-                **generation_kwargs,
-            )
+            try:
+                summary = summarizer.generate(
+                    text,
+                    max_length=max_length,
+                    memoizer_ignore_cache=ignore_cache,
+                    verbose=idx == 0,
+                    **generation_kwargs,
+                )
+            except Exception as err:
+                logger.error(f"Generation failed for sample {idx}")
+                if ignore_errors:
+                    logger.error(err)
+                    summary = None
+                else:
+                    raise err
+
             summaries.append(summary)
             progress.update(task, advance=1)
 
