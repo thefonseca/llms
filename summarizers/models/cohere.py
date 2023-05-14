@@ -46,7 +46,7 @@ class CohereSummarizer(InstructTunedSummarizer):
         self.request_interval = request_interval
 
     @staticmethod
-    def load_tokenizer(**kwargs):
+    def load_tokenizer():
         return CohereTokenizer()
 
     def default_max_tokens(self):

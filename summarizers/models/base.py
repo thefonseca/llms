@@ -40,8 +40,7 @@ class Summarizer:
         return {}
 
     def truncate_input(self, input, max_tokens):
-        tokenizer_kwargs = self.get_tokenizer_kwargs()
-        tokenizer = self.load_tokenizer(**tokenizer_kwargs)
+        tokenizer = self.load_tokenizer()
         input = tokenizer.encode(
             input, max_length=max_tokens, truncation=True, padding="max_length"
         )
@@ -140,8 +139,7 @@ class PromptBasedSummarizer(Summarizer):
         longest_idx = np.argmax(message_lengths)
 
         if excess_tokens > 0:
-            tokenizer_kwargs = self.get_tokenizer_kwargs()
-            tokenizer = self.load_tokenizer(**tokenizer_kwargs)
+            tokenizer = self.load_tokenizer()
             truncated_prompt = [dict(item) for item in prompt]
             text = prompt[longest_idx]["content"]
             tokens = tokenizer.encode(text)
@@ -198,8 +196,7 @@ class PromptBasedSummarizer(Summarizer):
         return prompt, generation_kwargs
 
     def num_tokens_for_prompt(self, messages):
-        tokenizer_kwargs = self.get_tokenizer_kwargs()
-        tokenizer = self.load_tokenizer(**tokenizer_kwargs)
+        tokenizer = self.load_tokenizer()
         # account for one newline after each message
         newline_tokens = tokenizer.encode("\n")
         num_tokens = len(newline_tokens) * (len(messages) - 1)
@@ -211,8 +208,7 @@ class PromptBasedSummarizer(Summarizer):
         prompt, truncated_tokens, _ = self.preprocess(
             text, truncation=truncation, **generation_kwargs
         )
-        tokenizer_kwargs = self.get_tokenizer_kwargs()
-        tokenizer = self.load_tokenizer(**tokenizer_kwargs)
+        tokenizer = self.load_tokenizer()
         if not isinstance(prompt, str):
             prompt = self.prompt_to_text(prompt)
         num_tokens = len(tokenizer.encode(prompt))

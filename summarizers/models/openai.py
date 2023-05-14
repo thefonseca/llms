@@ -16,7 +16,7 @@ class OpenAISummarizer(InstructTunedSummarizer):
         # wait an interval in seconds between requests
         self.request_interval = request_interval
 
-    def load_tokenizer(self, **kwargs):
+    def load_tokenizer(self):
         try:
             encoding = tiktoken.encoding_for_model(self.model_name)
         except KeyError:

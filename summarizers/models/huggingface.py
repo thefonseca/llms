@@ -23,21 +23,9 @@ class HFSummarizer(Summarizer):
         self,
         model_name,
         checkpoint_path=None,
-        cache_dir=None,
-        device_map="auto",
-        max_memory=None,
-        low_cpu_mem_usage=True,
-        load_in_8bit=False,
-        dtype="auto",
         **kwargs,
     ):
-        super().__init__(model_name, **kwargs)
-        self.cache_dir = cache_dir
-        self.device_map = device_map
-        self.max_memory = max_memory
-        self.low_cpu_mem_usage = low_cpu_mem_usage
-        self.load_in_8bit = load_in_8bit
-        self.dtype = dtype
+        super().__init__(model_name)
         self.tokenizer = None
         self.model = None
         self.model_config = None
@@ -45,13 +33,12 @@ class HFSummarizer(Summarizer):
         self.model_path = checkpoint_path
         if self.model_path is None:
             self.model_path = model_name
-
-    @property
-    def dtype(self):
-        return self._dtype
-
-    @dtype.setter
-    def dtype(self, value):
+        self.model_kwargs = kwargs
+        if "dtype" in self.model_kwargs:
+            dtype = self.model_kwargs["dtype"]
+            self.model_kwargs["dtype"] = self.infer_dtype(dtype)
+        
+    def infer_dtype(self, value):
         if value == "fp16":
             dtype = torch.float16
         elif value == "fp32":
@@ -65,23 +52,20 @@ class HFSummarizer(Summarizer):
         else:
             logger.warning(f"Unsupported dtype {value}. Setting dtype = 'auto'.")
             dtype = "auto"
-        self._dtype = dtype
+        return dtype
 
     def get_model_kwargs(self):
-        return dict(
-            model_path=self.model_path,
-            cache_dir=self.cache_dir,
-            device_map=self.device_map,
-            max_memory=self.max_memory,
-            low_cpu_mem_usage=self.low_cpu_mem_usage,
-            load_in_8bit=self.load_in_8bit,
-            dtype=self.dtype,
-        )
+        return dict(**self.model_kwargs)
 
     def get_tokenizer_kwargs(self):
-        return dict(cache_dir=self.cache_dir)
+        cache_dir = self.model_kwargs.get("cache_dir")
+        return dict(cache_dir=cache_dir)
 
-    def load_tokenizer(self, **kwargs):
+    def get_generation_config_kwargs(self):
+        cache_dir = self.model_kwargs.get("cache_dir")
+        return dict(cache_dir=cache_dir)
+
+    def load_tokenizer(self):
         if self.tokenizer:
             return self.tokenizer
 
@@ -90,40 +74,45 @@ class HFSummarizer(Summarizer):
         if "google/pegasus-x-base" in model_path:
             model_path = "google/pegasus-x-base"
 
+        kwargs = self.get_tokenizer_kwargs()
         tokenizer = AutoTokenizer.from_pretrained(model_path, **kwargs)
         self.tokenizer = tokenizer
         return tokenizer
 
-    def load_model_config(self, model_path, **kwargs):
+    def load_model_config(self):
         if self.model_config is not None:
             return self.model_config
 
         try:
-            model_config = AutoConfig.from_pretrained(model_path, **kwargs)
+            kwargs = self.get_model_kwargs()
+            model_config = AutoConfig.from_pretrained(self.model_path, **kwargs)
             self.model_config = model_config
         except OSError:
             logger.warning(
-                f"{model_path} does not appear to have a file named config.json"
+                f"{self.model_path} does not appear to have a file named config.json"
             )
             self.model_config = AutoConfig()
         return self.model_config
 
-    def load_generation_config(self, model_path, **kwargs):
+    def load_generation_config(self):
         if self.generation_config is not None:
             return self.generation_config
 
         try:
-            generation_config = GenerationConfig.from_pretrained(model_path, **kwargs)
+            kwargs = self.get_generation_config_kwargs()
+            generation_config = GenerationConfig.from_pretrained(
+                self.model_path, **kwargs
+            )
             self.generation_config = generation_config
         except OSError:
             logger.warning(
-                f"{model_path} does not appear to have a file named generation_config.json"
+                f"{self.model_path} does not appear to have a file named generation_config.json"
             )
             self.generation_config = GenerationConfig()
         return self.generation_config
 
     def default_max_tokens(self):
-        config = self.load_model_config(self.model_path, cache_dir=self.cache_dir)
+        config = self.load_model_config()
         if "google/bigbird-pegasus-large" in self.model_path:
             max_tokens = 3072
         elif hasattr(config, "max_position_embeddings"):
@@ -166,38 +155,27 @@ class HFSummarizer(Summarizer):
         self,
         model_name,
         model_input,
-        model_path=None,
-        cache_dir=None,
-        device_map="auto",
-        max_memory=None,
-        low_cpu_mem_usage=True,
-        load_in_8bit=False,
-        dtype="auto",
         do_sample=True,
         temperature=0.8,
         top_p=0.95,
         seed=42,
         keep_generated_only=False,
         memoizer_ignore_cache=False,
-        **generation_kwargs,
+        **kwargs,
     ):
         if seed is not None:
             torch.manual_seed(seed)
 
-        if model_path is None:
-            model_path = model_name
+        logger.debug(f"Performing generation for model {model_name}...")
+        model_kwargs = self.get_model_kwargs()
+        generation_kwargs = {}
+        for k, v in kwargs.items():
+            if k not in model_kwargs:
+                generation_kwargs[k] = v
 
-        model = self.load_model(
-            model_path,
-            cache_dir=cache_dir,
-            device_map=device_map,
-            max_memory=max_memory,
-            low_cpu_mem_usage=low_cpu_mem_usage,
-            load_in_8bit=load_in_8bit,
-            dtype=dtype,
-        )
-        tokenizer = self.load_tokenizer(cache_dir=cache_dir)
-        generation_config = self.load_generation_config(model_path, cache_dir=cache_dir)
+        model = self.load_model(**model_kwargs)
+        tokenizer = self.load_tokenizer()
+        generation_config = self.load_generation_config()
 
         with torch.no_grad():
             if isinstance(model_input, str):
@@ -236,8 +214,6 @@ class Text2TextSummarizer(HFSummarizer):
 
     def load_model(
         self,
-        model_path,
-        cache_dir=None,
         device_map="auto",
         max_memory=None,
         low_cpu_mem_usage=True,
@@ -248,10 +224,10 @@ class Text2TextSummarizer(HFSummarizer):
         if self.model:
             return self.model
 
-        logger.info(f"Loading model {model_path}...")
+        logger.info(f"Loading model {self.model_path}...")
         if load_in_8bit:
             dtype = torch.int8
-
+        
         if any(
             [x in self.model_path] for x in ["google/pegasus", "google/bigbird-pegasus"]
         ):
@@ -259,12 +235,11 @@ class Text2TextSummarizer(HFSummarizer):
             low_cpu_mem_usage = False
         else:
             device_map = self.infer_device_map(
-                model_path, max_memory=max_memory, dtype=dtype
+                self.model_path, max_memory=max_memory, dtype=dtype
             )
 
         model = AutoModelForSeq2SeqLM.from_pretrained(
-            model_path,
-            cache_dir=cache_dir,
+            self.model_path,
             device_map=device_map,
             low_cpu_mem_usage=low_cpu_mem_usage,
             load_in_8bit=load_in_8bit,
@@ -278,7 +253,7 @@ class Text2TextSummarizer(HFSummarizer):
             except:
                 logger.warning("Failed to get cuda device")
 
-        tokenizer = self.load_tokenizer(cache_dir=cache_dir)
+        tokenizer = self.load_tokenizer()
         embedding_size = model.get_input_embeddings().weight.shape[0]
         if len(tokenizer) > embedding_size:
             model.resize_token_embeddings(len(tokenizer))
@@ -292,7 +267,7 @@ class Text2TextSummarizer(HFSummarizer):
         return model
 
     def truncate_input(self, input, max_tokens, **kwargs):
-        tokenizer = self.load_tokenizer(cache_dir=self.cache_dir)
+        tokenizer = self.load_tokenizer()
         input = tokenizer(
             [input],
             padding="max_length",
@@ -326,9 +301,7 @@ class Text2TextSummarizer(HFSummarizer):
             text, truncation=truncation, **generation_kwargs
         )
         if max_length is None:
-            generation_config = self.load_generation_config(
-                self.model_path, self.cache_dir
-            )
+            generation_config = self.load_generation_config()
             if hasattr("max_length", generation_config):
                 max_length = generation_config.max_length
 
@@ -336,7 +309,7 @@ class Text2TextSummarizer(HFSummarizer):
         if do_sample is None:
             generation_kwargs["do_sample"] = False
 
-        config = self.load_model_config(self.model_path, cache_dir=self.cache_dir)
+        config = self.load_model_config()
         if hasattr(config, "task_specific_params"):
             task_params = config.task_specific_params
             if task_params and "summarization" in task_params:
@@ -365,8 +338,6 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
 
     def load_model(
         self,
-        model_path,
-        cache_dir=None,
         device_map="auto",
         max_memory=None,
         low_cpu_mem_usage=True,
@@ -377,16 +348,15 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         if self.model:
             return self.model
 
-        logger.info(f"Loading model {model_path}...")
+        logger.info(f"Loading model {self.model_path}...")
         if load_in_8bit:
             dtype = torch.int8
-
+        
         device_map = self.infer_device_map(
-            model_path, device_map=device_map, max_memory=max_memory, dtype=dtype
+            self.model_path, device_map=device_map, max_memory=max_memory, dtype=dtype
         )
         model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            cache_dir=cache_dir,
+            self.model_path,
             device_map=device_map,
             low_cpu_mem_usage=low_cpu_mem_usage,
             load_in_8bit=load_in_8bit,
