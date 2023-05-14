@@ -387,14 +387,10 @@ def evaluate_model(
             timestr=timestr,
             run_id=run_id,
         )
-        seed = kwargs.get("seed", 17)
-        evaluate(
-            preds,
-            targets,
-            scores=scores,
-            save_preds_to=save_to,
-            seed=seed,
-        )
+        _kwargs = {}
+        if "seed" in kwargs:
+            _kwargs["seed"] = kwargs.get("seed")
+        evaluate(preds, targets, scores=scores, save_preds_to=save_to, **_kwargs)
 
 
 if __name__ == "__main__":
