@@ -10,6 +10,8 @@ from rich.logging import RichHandler
 from rich.progress import Progress, MofNCompleteColumn, SpinnerColumn
 from scipy.stats import bootstrap
 
+from .fulltext import convert
+
 
 try:
     nltk.data.find("tokenizers/punkt")
@@ -142,7 +144,7 @@ def aggregate_scores(scores):
 
     confidence_intervals = {}
     for key in agg_scores.keys():
-        if len(agg_scores[key]):
+        if len(agg_scores[key]) > 1:
             ci = bootstrap(
                 (agg_scores[key],),
                 np.mean,
@@ -289,13 +291,12 @@ def log(logger, message, verbose=False, max_length=300):
     logger.log(level, message)
 
 
-def is_csv_file(path):
-    return os.path.exists(path) and path[-4:].lower() == ".csv"
-
-
-def is_json_file(path):
-    return os.path.exists(path) and path[-5:].lower() == ".json"
-
-
-def is_txt_file(path):
-    return os.path.exists(path) and path[-4:].lower() == ".txt"
+def pdf_to_text(pdf_path):
+    try:
+        outpath = convert(pdf_path)
+        with open(outpath) as fh:
+            text = fh.readlines()
+            return text
+    except RuntimeError as err:
+        logger.error(f"Error converting PDF: {pdf_path}")
+        logger.error(str(err))

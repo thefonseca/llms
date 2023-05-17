@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-import pathlib
+from pathlib import Path
 
 from arxiv import SortCriterion
 import datasets
@@ -11,7 +11,7 @@ import pandas as pd
 from p_tqdm import p_map
 from rouge_score import scoring
 
-from .arxiv import search_arxiv
+from .arxiv import search_arxiv, pdf_to_text
 from .inference import predict_summaries
 from .metrics import summarization_metrics
 from .utils import (
@@ -19,9 +19,6 @@ from .utils import (
     compute_metric,
     config_logging,
     get_output_path,
-    is_csv_file,
-    is_json_file,
-    is_txt_file,
     log_scores,
     sent_tokenize,
     word_tokenize,
@@ -204,7 +201,7 @@ def evaluate(
     _print_eval_metrics(results)
 
     if save_preds_to:
-        filepath = pathlib.Path(save_preds_to)
+        filepath = Path(save_preds_to)
         filepath.parent.mkdir(parents=True, exist_ok=True)
         preds_df = pd.DataFrame({"prediction": _preds, "target": _targets})
         preds_filename = f"{filepath.stem}_predictions.csv"
@@ -227,7 +224,7 @@ def evaluate(
 def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
     logger.info(f"Arxiv IDs: {arxiv_id}")
     logger.info(f"Arxiv query: {arxiv_query}")
-    if arxiv_id and is_txt_file(arxiv_id):
+    if arxiv_id and Path(arxiv_id).suffix == ".txt":
         arxiv_ids_file = arxiv_id
         arxiv_id = np.loadtxt(arxiv_ids_file)
         logger.info(f"Loaded {len(arxiv_id)} arXiv IDs from {arxiv_ids_file}")
@@ -259,6 +256,7 @@ def evaluate_model(
     split=None,
     source_key="article",
     target_key="abstract",
+    source_file=None,
     arxiv_id=None,
     arxiv_query=None,
     model_name=None,
@@ -283,9 +281,9 @@ def evaluate_model(
             dataset_name, dataset_config, split, output_dir, run_id=run_id
         )
 
-    if all(x is None for x in [dataset_name, arxiv_id, arxiv_query]):
+    if all(x is None for x in [dataset_name, arxiv_id, arxiv_query, source_file]):
         raise ValueError(
-            "Plese specify one of 'dataset_name', 'arxiv_id' or 'arxiv_query'"
+            "Plese specify one of 'dataset_name', 'arxiv_id', 'arxiv_query', or 'source_file'"
         )
 
     if model_name is None and prediction_path is None:
@@ -305,11 +303,17 @@ def evaluate_model(
         if save_to:
             arxiv_data_path = os.path.join(save_to, "arxiv-data.json")
             pd.DataFrame(eval_data).to_json(arxiv_data_path)
-
-    elif is_json_file(dataset_name):
+    elif source_file and Path(source_file).suffix == ".pdf":
+        text = pdf_to_text(source_file)
+        eval_data = {source_key: [text], target_key: []}
+    elif source_file and Path(source_file).suffix == ".txt":
+        with open(source_file) as fh:
+            text = fh.readlines()
+        eval_data = {source_key: [text], target_key: []}
+    elif Path(dataset_name).suffix == ".json":
         eval_data = pd.read_json(dataset_name)
         logger.info(f"Loaded {len(eval_data)} samples from {dataset_name}")
-    elif is_csv_file(dataset_name):
+    elif Path(dataset_name).suffix == ".csv":
         eval_data = pd.read_csv(dataset_name)
         logger.info(f"Loaded {len(eval_data)} samples from {dataset_name}")
     else:
@@ -335,7 +339,7 @@ def evaluate_model(
     for model_name in model_names:
         logger.info(f"Evaluating {model_name}")
 
-        if is_csv_file(model_name):
+        if Path(model_name).suffix == ".csv":
             logger.info(f"Loading predictions from {model_name}...")
             summary_data = pd.read_csv(model_name)
             preds = summary_data[prediction_key].values[:max_samples]
@@ -378,19 +382,20 @@ def evaluate_model(
                 )
                 scores[metric_name] = metric_scores
 
-        save_to = get_output_path(
-            output_dir,
-            dataset_name,
-            dataset_config,
-            split,
-            model_name=model_name,
-            timestr=timestr,
-            run_id=run_id,
-        )
-        _kwargs = {}
-        if "seed" in kwargs:
-            _kwargs["seed"] = kwargs.get("seed")
-        evaluate(preds, targets, scores=scores, save_preds_to=save_to, **_kwargs)
+        if targets:
+            save_to = get_output_path(
+                output_dir,
+                dataset_name,
+                dataset_config,
+                split,
+                model_name=model_name,
+                timestr=timestr,
+                run_id=run_id,
+            )
+            _kwargs = {}
+            if "seed" in kwargs:
+                _kwargs["seed"] = kwargs.get("seed")
+            evaluate(preds, targets, scores=scores, save_preds_to=save_to, **_kwargs)
 
 
 if __name__ == "__main__":

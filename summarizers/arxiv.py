@@ -7,8 +7,7 @@ import arxiv
 from arxiv import SortCriterion, SortOrder
 import textdistance
 
-from .fulltext import convert
-from .utils import get_cache_dir, add_progress_task, get_progress_bar
+from .utils import get_cache_dir, add_progress_task, get_progress_bar, pdf_to_text
 
 logger = logging.getLogger(__name__)
 
@@ -114,16 +113,7 @@ def load_arxiv_article(
     txt_path = os.path.join(pdf_dir, txt_filename)
 
     if not os.path.exists(txt_path) or "text" not in metadata:
-        try:
-            outpath = convert(pdf_path)
-            with open(outpath) as fh:
-                text = fh.readlines()
-                metadata["text"] = text
-        except RuntimeError as err:
-            logger.error(f"Error converting PDF: {pdf_path}")
-            logger.error(str(err))
-            metadata["text"] = None
-
+        metadata["text"] = pdf_to_text(pdf_path)
         metadata_path = arxiv_metadata_path(arxiv_id, arxiv_path)
         with open(metadata_path, "w") as fh:
             json.dump(metadata, fh)
