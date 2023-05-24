@@ -222,6 +222,11 @@ def evaluate(
 
 
 def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
+    if isinstance(arxiv_id, list):
+        arxiv_id = [str(x) for x in arxiv_id]
+    else:
+        arxiv_id = str(arxiv_id)
+
     logger.info(f"Arxiv IDs: {arxiv_id}")
     logger.info(f"Arxiv query: {arxiv_query}")
     if arxiv_id and Path(arxiv_id).suffix == ".txt":
@@ -382,7 +387,7 @@ def evaluate_model(
                 )
                 scores[metric_name] = metric_scores
 
-        if targets:
+        if targets is not None and len(targets):
             save_to = get_output_path(
                 output_dir,
                 dataset_name,

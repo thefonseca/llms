@@ -37,7 +37,7 @@ class HFSummarizer(Summarizer):
         if "dtype" in self.model_kwargs:
             dtype = self.model_kwargs["dtype"]
             self.model_kwargs["dtype"] = self.infer_dtype(dtype)
-        
+
     def infer_dtype(self, value):
         if value == "fp16":
             dtype = torch.float16
@@ -227,7 +227,7 @@ class Text2TextSummarizer(HFSummarizer):
         logger.info(f"Loading model {self.model_path}...")
         if load_in_8bit:
             dtype = torch.int8
-        
+
         if any(
             [x in self.model_path] for x in ["google/pegasus", "google/bigbird-pegasus"]
         ):
@@ -351,7 +351,7 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         logger.info(f"Loading model {self.model_path}...")
         if load_in_8bit:
             dtype = torch.int8
-        
+
         device_map = self.infer_device_map(
             self.model_path, device_map=device_map, max_memory=max_memory, dtype=dtype
         )
