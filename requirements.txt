@@ -18,3 +18,4 @@ fschat==0.2.3
 arxiv==1.4.7
 pdfminer.six==20221105
 textdistance==4.5.0
+textstat==0.7.3

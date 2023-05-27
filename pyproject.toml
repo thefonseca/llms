@@ -36,7 +36,8 @@ dependencies = [
   "protobuf>=3.20.0",
   "arxiv>=1.4.7",
   "pdfminer.six==20221105",
-  "textdistance==4.5.0"
+  "textdistance==4.5.0",
+  "textstat==0.7.3"
 ]
 
 [project.urls]

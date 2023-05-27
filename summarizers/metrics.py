@@ -2,10 +2,12 @@ import json
 import logging
 from pathlib import Path
 
+from nltk import ngrams
 import numpy as np
 import pandas as pd
 from rouge_score import rouge_scorer, scoring
 from scipy.stats import bootstrap
+import textstat
 
 from .utils import add_progress_task, get_progress_bar, sent_tokenize, word_tokenize
 
@@ -172,10 +174,26 @@ def aggregate_metrics(metrics):
     return scores
 
 
+def abstractiveness(source, summary):
+    result = {}
+    if isinstance(source, list):
+        source = "\n".join(source)
+    if isinstance(summary, list):
+        summary = "\n".join(summary)
+
+    for n in range(1, 5):
+        source_ngrams = list(ngrams(source.split(" "), n))
+        summary_ngrams = list(ngrams(summary.split(" "), n))
+        novel_ngrams = [x for x in summary_ngrams if x not in source_ngrams]
+        result[f"{n}_gram"] = len(novel_ngrams) / len(summary_ngrams)
+    return result
+
+
 def text_statistics(text, prefix=None):
     sentences_per_sample = []
     tokens_per_sample = []
     tokens_per_sentence = []
+    flesch_kincaid = []
 
     if isinstance(text, list):
         sentences = text
@@ -186,11 +204,12 @@ def text_statistics(text, prefix=None):
     sentences_per_sample.append(len(sentences))
     tokens_per_sentence.append(np.mean([len(word_tokenize(s)) for s in sentences]))
     tokens_per_sample.append(len(word_tokenize(text)))
-
+    flesch_kincaid.append(textstat.flesch_kincaid_grade(text))
     statistics = dict(
         sentences_per_sample=sentences_per_sample,
         tokens_per_sentence=tokens_per_sentence,
         tokens_per_sample=tokens_per_sample,
+        fkgl_readability=flesch_kincaid,
     )
     if prefix:
         statistics = {f"{prefix}_{k}": v for k, v in statistics.items()}
@@ -216,17 +235,19 @@ def rouge_score(summary, target_summary, rouge_ngrams=None):
 
 
 def summarization_metrics(
-    summary, target_summary=None, rouge_ngrams=None, verbose=False
+    summary, target_summary=None, source=None, rouge_ngrams=None, verbose=False
 ):
     metrics = {}
-    metrics["stats"] = text_statistics(summary, prefix="summary")
+    metrics["summary_stats"] = text_statistics(summary)
 
     if target_summary is not None:
-        target_stats = text_statistics(target_summary, prefix="target")
-        for key, value in target_stats.items():
-            metrics["stats"][key] = value
+        metrics["target_stats"] = text_statistics(target_summary)
         rouge = rouge_score(summary, target_summary, rouge_ngrams=rouge_ngrams)
         metrics["rouge"] = [rouge]
+
+    if source is not None:
+        metrics["summary_abstractiveness"] = abstractiveness(source, summary)
+        metrics["target_abstractiveness"] = abstractiveness(source, target_summary)
 
     if verbose:
         log_metrics(metrics)

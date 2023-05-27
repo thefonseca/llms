@@ -52,6 +52,7 @@ def _aggregate_results(results, scores):
 def eval_job(
     pred,
     target,
+    source,
     doc_id,
 ):
     try:
@@ -60,13 +61,14 @@ def eval_job(
     except:
         logger.error(f"Invalid target summary: {target}")
 
-    metrics = summarization_metrics(pred, target_summary=target)
+    metrics = summarization_metrics(pred, target_summary=target, source=source)
     return metrics
 
 
 def evaluate(
     preds,
     targets,
+    sources,
     scores=None,
     save_to=None,
     n_samples=None,
@@ -75,16 +77,18 @@ def evaluate(
     np.random.seed(seed)
     _preds = preds[:n_samples]
     _targets = targets[:n_samples]
-
+    _sources = sources[:n_samples]
     doc_ids = list(range(len(_preds)))
     results = p_map(
-        lambda pred, target, doc_id: eval_job(
+        lambda pred, target, source, doc_id: eval_job(
             pred,
             target,
+            source,
             doc_id,
         ),
         _preds,
         _targets,
+        _sources,
         doc_ids,
     )
 
@@ -282,7 +286,14 @@ def evaluate_model(
             _kwargs = {}
             if "seed" in kwargs:
                 _kwargs["seed"] = kwargs.get("seed")
-            evaluate(preds, targets, scores=scores, save_to=save_to, **_kwargs)
+            evaluate(
+                preds,
+                targets,
+                sources,
+                scores=scores,
+                save_to=save_to,
+                **_kwargs,
+            )
 
 
 if __name__ == "__main__":
