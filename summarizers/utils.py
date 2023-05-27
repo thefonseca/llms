@@ -5,10 +5,8 @@ import re
 import time
 
 import nltk
-import numpy as np
 from rich.logging import RichHandler
 from rich.progress import Progress, MofNCompleteColumn, SpinnerColumn
-from scipy.stats import bootstrap
 
 from .fulltext import convert
 
@@ -64,123 +62,6 @@ def sent_tokenize(text):
     else:
         sents = text
     return sents
-
-
-def log_rouge_scores(scores):
-    info = ["ROUGE scores:"]
-
-    for k, v in sorted(scores.items()):
-        if hasattr(v, "low"):
-            score_info = [
-                "%s-R: %f,%f,%f" % (k, v.low.recall, v.mid.recall, v.high.recall),
-                "%s-P: %f,%f,%f"
-                % (k, v.low.precision, v.mid.precision, v.high.precision),
-                "%s-F: %f,%f,%f" % (k, v.low.fmeasure, v.mid.fmeasure, v.high.fmeasure),
-            ]
-        else:
-            score_info = [
-                "%s-R: %f,%f,%f" % (k, v.recall, v.recall, v.recall),
-                "%s-P: %f,%f,%f" % (k, v.precision, v.precision, v.precision),
-                "%s-F: %f,%f,%f" % (k, v.fmeasure, v.fmeasure, v.fmeasure),
-            ]
-        info.append("\n".join(score_info))
-        info.append(" ")
-
-    logger.info("\n".join(info))
-
-
-def log_scores(name, scores):
-    if len(scores) == 0:
-        return
-
-    if name == "rouge":
-        log_rouge_scores(scores)
-    else:
-        info = [f"{name}:"]
-        for key in scores.keys():
-            if type(scores[key]) == dict:
-                _scores = []
-                for confidence_key in ["low", "mean", "high"]:
-                    if isinstance(
-                        scores[key][confidence_key], np.ndarray
-                    ) or isinstance(scores[key][confidence_key], list):
-                        score = [f"{x:.3f}" for x in scores[key][confidence_key]]
-                        score = f"\n  {confidence_key}: {str(score)}"
-                    else:
-                        score = f"{scores[key][confidence_key]:.3f}"
-                    _scores.append(score)
-
-                _scores = ", ".join(_scores)
-            else:
-                _scores = f"{scores[key]:.3f}"
-            info.append(f"{key}: {_scores}")
-        info.append(" ")
-        logger.info("\n".join(info))
-
-
-def aggregate_scores(scores):
-    if len(scores) == 1:
-        return scores[0]
-    elif len(scores) == 0:
-        return {}
-
-    agg_scores = {}
-
-    for score in scores:
-        for key in score.keys():
-            key_scores = agg_scores.get(key, [])
-            agg_scores[key] = key_scores
-
-            _score = score[key]
-            if isinstance(_score, list):
-                if np.any(np.isinf(_score)):
-                    continue
-                if len(_score) == 1:
-                    _score = _score[0]
-            elif np.isinf(_score):
-                continue
-
-            key_scores.append(_score)
-
-    confidence_intervals = {}
-    for key in agg_scores.keys():
-        if len(agg_scores[key]) > 1:
-            ci = bootstrap(
-                (agg_scores[key],),
-                np.mean,
-                vectorized=True,
-                axis=0,
-                confidence_level=0.95,
-                random_state=17,
-                method="BCa",
-            )
-            confidence_intervals[key] = {
-                "low": ci.confidence_interval.low.tolist(),
-                "high": ci.confidence_interval.high.tolist(),
-                "mean": np.mean(agg_scores[key], axis=0).tolist(),
-            }
-
-    return confidence_intervals
-
-
-def compute_metric(references, candidates, metric_fn, progress=None, **metric_kwargs):
-    if progress is None:
-        progress = get_progress_bar()
-
-    results = []
-    task = add_progress_task(
-        progress,
-        f"Computing {metric_fn.__name__}...",
-        total=len(references),
-        existing_ok=False,
-    )
-    with progress:
-        for ref, cand in zip(references, candidates):
-            results.append(
-                metric_fn(references=[ref], candidates=[cand], **metric_kwargs)
-            )
-            progress.update(task, advance=1)
-    return results
 
 
 def get_output_path(

@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 from pathlib import Path
@@ -9,119 +8,45 @@ import fire
 import numpy as np
 import pandas as pd
 from p_tqdm import p_map
-from rouge_score import scoring
 
 from .arxiv import search_arxiv, pdf_to_text
 from .inference import predict_summaries
-from .metrics import summarization_metrics
-from .utils import (
-    aggregate_scores,
+from .metrics import (
+    aggregate_metrics,
     compute_metric,
-    config_logging,
-    get_output_path,
-    log_scores,
-    sent_tokenize,
-    word_tokenize,
+    log_metrics,
+    save_scores,
+    summarization_metrics,
 )
+from .utils import config_logging, get_output_path
 
 logger = logging.getLogger(__name__)
 
 
-def _print_eval_metrics(results):
-    info_str = [
-        f"Number of documents: {len(results['sents_per_summary'])}",
-        f"Average sentences per summary: {np.mean(results['sents_per_summary'])}",
-        f"Average tokens per summary: {np.mean(results['tokens_per_summary'])}",
-        f"Average tokens per summary sent: {np.mean(results['tokens_per_summary_sent'])}",
-        f"Average sentences per target: {np.mean(results['sents_per_abstract'])}",
-        f"Average tokens per target: {np.mean(results['tokens_per_abstract'])}",
-        f"Average tokens per target sent: {np.mean(results['tokens_per_abstract_sent'])}",
-        f"Average token difference: {np.mean(results['length_diffs'])}",
-    ]
-    logger.info("\n".join(info_str))
-    scores = results["scores"]
-    for score_key in scores:
-        log_scores(score_key, scores[score_key])
-
-
 def _aggregate_parallel_results(p_results):
     results = {}
-
     for result in p_results:
         for key in result.keys():
-            if type(result[key]) == dict:
-                dict_values = results[key]
-                for dict_key in result[key]:
-                    values = dict_values.get(dict_key, [])
-                    values.extend(result[key][dict_key])
-                    dict_values[dict_key] = values
-            else:
-                values = results.get(key, [])
+            values = results.get(key, [])
+            if isinstance(result[key], list):
                 values.extend(result[key])
-                results[key] = values
+            else:
+                values.append(result[key])
+            results[key] = values
     return results
 
 
-def _aggregate_results(results):
+def _aggregate_results(results, scores):
     if type(results) == list:
         results = _aggregate_parallel_results(results)
 
-    scores = {}
-    aggregator = scoring.BootstrapAggregator()
-    for rouge_score in results["rouge_scores"]:
-        aggregator.add_scores(rouge_score)
-    scores["rouge"] = aggregator.aggregate()
-    results["scores"] = scores
-    return results
-
-
-def _get_text_statistics(target, summary):
-    sents_per_summary = []
-    tokens_per_summary = []
-    tokens_per_summary_sent = []
-    sents_per_abstract = []
-    tokens_per_abstract = []
-    tokens_per_abstract_sent = []
-    length_diffs = []
-
-    if isinstance(target, list):
-        target_sents = target
-        target = "\n".join(target)
-    else:
-        target_sents = sent_tokenize(target)
-
-    if isinstance(summary, list):
-        summary_sents = summary
-        summary = "\n".join(summary)
-    else:
-        summary_sents = sent_tokenize(summary)
-
-    pred_words = word_tokenize(summary)
-    target_words = word_tokenize(target)
-
-    length_diff = len(pred_words) - len(target_words)
-    length_diffs.append(length_diff)
-    sents_per_summary.append(len(summary_sents))
-    tokens_per_summary_sent.append(
-        np.mean([len(word_tokenize(s)) for s in summary_sents])
-    )
-    tokens_per_summary.append(len(pred_words))
-    sents_per_abstract.append(len(target_sents))
-    tokens_per_abstract_sent.append(
-        np.mean([len(word_tokenize(s)) for s in target_sents])
-    )
-    tokens_per_abstract.append(len(target_words))
-
-    statistics = dict(
-        sents_per_summary=sents_per_summary,
-        tokens_per_summary=tokens_per_summary,
-        tokens_per_summary_sent=tokens_per_summary_sent,
-        sents_per_abstract=sents_per_abstract,
-        tokens_per_abstract=tokens_per_abstract,
-        tokens_per_abstract_sent=tokens_per_abstract_sent,
-        length_diffs=length_diffs,
-    )
-    return statistics
+    if scores:
+        for key in scores:
+            if key in results:
+                logger.warning(f"Values for metric {key} already exist.")
+            results[key] = scores[key]
+    agg_scores = aggregate_metrics(results)
+    return results, agg_scores
 
 
 def eval_job(
@@ -129,8 +54,6 @@ def eval_job(
     target,
     doc_id,
 ):
-    rouge_scores = []
-
     try:
         if target is None or str(target) == "nan" or len(target) == 0:
             return
@@ -138,21 +61,14 @@ def eval_job(
         logger.error(f"Invalid target summary: {target}")
 
     metrics = summarization_metrics(pred, target_summary=target)
-    rouge_score = metrics["rouge"]
-
-    if rouge_score:
-        rouge_scores.append(rouge_score)
-
-    stats = _get_text_statistics(target, pred)
-    results = dict(rouge_scores=rouge_scores, **stats)
-    return results
+    return metrics
 
 
 def evaluate(
     preds,
     targets,
     scores=None,
-    save_preds_to=None,
+    save_to=None,
     n_samples=None,
     seed=17,
 ):
@@ -172,53 +88,19 @@ def evaluate(
         doc_ids,
     )
 
-    results = _aggregate_results(results)
-    scores_df = {}
+    results, agg_scores = _aggregate_results(results, scores)
+    log_metrics(agg_scores)
 
-    if scores:
-        for score_key in scores:
-            agg_scores = aggregate_scores(scores[score_key])
-            results["scores"][score_key] = agg_scores
-
-            for sample_scores in scores[score_key]:
-                for sub_key, value in sample_scores.items():
-                    values = scores_df.get(f"{score_key}_{sub_key}", [])
-                    if isinstance(sample_scores[sub_key], list):
-                        value = sample_scores[sub_key][0]
-                    else:
-                        value = sample_scores[sub_key]
-                    values.append(value)
-                    scores_df[f"{score_key}_{sub_key}"] = values
-
-    for scores in results["rouge_scores"]:
-        for score_key, score in scores.items():
-            for sub_key in ["precision", "recall", "fmeasure"]:
-                values = scores_df.get(f"{score_key}_{sub_key}", [])
-                value = getattr(score, sub_key)
-                values.append(value)
-                scores_df[f"{score_key}_{sub_key}"] = values
-
-    _print_eval_metrics(results)
-
-    if save_preds_to:
-        filepath = Path(save_preds_to)
+    if save_to:
+        filepath = Path(save_to)
         filepath.parent.mkdir(parents=True, exist_ok=True)
         preds_df = pd.DataFrame({"prediction": _preds, "target": _targets})
         preds_filename = f"{filepath.stem}_predictions.csv"
         preds_filename = filepath.parent / preds_filename
         preds_df.to_csv(preds_filename, index=False)
+        save_scores(results, agg_scores, save_to)
 
-        scores_df = pd.DataFrame(scores_df)
-        scores_filename = f"{filepath.stem}_metrics_per_sample.csv"
-        scores_filename = filepath.parent / scores_filename
-        scores_df.to_csv(scores_filename, index=False)
-
-        results_filename = f"{filepath.stem}_metrics.json"
-        results_filename = filepath.parent / results_filename
-        with open(results_filename, "w") as file:
-            json.dump(results["scores"], file, indent=2)
-
-    return results["scores"]
+    return scores
 
 
 def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
@@ -400,7 +282,7 @@ def evaluate_model(
             _kwargs = {}
             if "seed" in kwargs:
                 _kwargs["seed"] = kwargs.get("seed")
-            evaluate(preds, targets, scores=scores, save_preds_to=save_to, **_kwargs)
+            evaluate(preds, targets, scores=scores, save_to=save_to, **_kwargs)
 
 
 if __name__ == "__main__":
