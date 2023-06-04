@@ -7,6 +7,7 @@ from .models.huggingface import (
     Text2TextSummarizer,
     CausalLMSummarizer,
     T5Summarizer,
+    InstructCausalLMSummarizer,
     AlpacaSummarizer,
     VicunaSummarizer,
 )
@@ -28,7 +29,10 @@ def summarizer_for_model(model_name, **kwargs):
         ".*alpaca.*": AlpacaSummarizer,
         ".*vicuna.*": VicunaSummarizer,
         "summarize-((medium)|(xlarge))": CohereSummarizer,
-        "mosaicml/mpt[-\d\w]+": CausalLMSummarizer,
+        "mosaicml/mpt[-\d\w]$": CausalLMSummarizer,
+        "tiiuae/falcon[-\d\w]$": CausalLMSummarizer,
+        "mosaicml/mpt[-\d\w]+instruct": AlpacaSummarizer,
+        "tiiuae/falcon[-\d\w]+instruct": InstructCausalLMSummarizer,
     }
 
     for key, val in summarizer_map.items():
