@@ -74,6 +74,7 @@ def evaluate(
     n_samples=None,
     seed=17,
 ):
+    # this seed is for confidence interval estimation via bootstrapping
     np.random.seed(seed)
     _preds = preds[:n_samples]
     _targets = targets[:n_samples]
@@ -155,6 +156,7 @@ def evaluate_model(
     prediction_path=None,
     prediction_key="prediction",
     max_samples=None,
+    shuffle=False,
     output_dir=None,
     cache_start=0,
     cache_end=None,
@@ -213,8 +215,20 @@ def evaluate_model(
         )
         eval_data = eval_data[split]
 
-    sources = eval_data[source_key][:max_samples]
-    targets = eval_data[target_key][:max_samples]
+    sources = eval_data[source_key]
+    targets = eval_data[target_key]
+
+    if shuffle:
+        seed = kwargs.get("seed")
+        logger.info(f"Shuffling data using seed: {seed}")
+        np.random.seed(seed)
+        idxs = list(range(len(sources)))
+        np.random.shuffle(idxs)
+        sources = [sources[idx] for idx in idxs]
+        targets = [targets[idx] for idx in idxs]
+
+    sources = sources[:max_samples]
+    targets = targets[:max_samples]
 
     model_names = []
     if model_name and isinstance(model_name, (list, tuple)):
