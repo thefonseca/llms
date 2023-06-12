@@ -88,7 +88,9 @@ def predict_summaries(
         summarizer = summarizer_for_model(model_name, **model_kwargs)
 
     if hasattr(summarizer, "token_statistics"):
-        stats = summarizer.token_statistics(sources, max_length=max_length)
+        stats = summarizer.token_statistics(
+            sources, max_length=max_length, **generation_kwargs
+        )
         logger.info(f"Token statistics for input:\n{pformat(stats)}")
 
     with progress:

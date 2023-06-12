@@ -1,4 +1,5 @@
 import logging
+import re
 
 from accelerate import infer_auto_device_map, init_empty_weights
 from fastchat.conversation import get_default_conv_template
@@ -368,7 +369,7 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
 
     def preprocess(self, text, truncation=True, max_length=None, **generation_kwargs):
         prompt, truncated_tokens, generation_kwargs = super().preprocess(
-            text, truncation=truncation, **generation_kwargs
+            text, truncation=truncation, max_length=max_length, **generation_kwargs
         )
         if max_length is None:
             num_input_tokens = self.num_tokens_for_prompt(prompt)
@@ -378,8 +379,18 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
             max_new_tokens = max_length
         generation_kwargs["max_new_tokens"] = max_new_tokens
         generation_kwargs["keep_generated_only"] = True
+        generation_kwargs.pop("max_tokens", None)
         prompt_text = self.prompt_to_text(prompt)
         return prompt_text, truncated_tokens, generation_kwargs
+
+    def postprocess(self, summary):
+        # special newline postprocessing for some models
+        if "mosaicml/mpt-7b" in self.model_path:
+            summary = [s for s in re.split("[\n\s#]+$", summary) if len(s)]
+            summary = [re.sub("^[\n\s#]+", "", s.strip()).strip() for s in summary]
+            summary = "\n".join(summary)
+        summary = super().postprocess(summary)
+        return summary
 
 
 class InstructCausalLMSummarizer(InstructTunedSummarizer, CausalLMSummarizer):

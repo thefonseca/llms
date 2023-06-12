@@ -242,7 +242,7 @@ def evaluate_model(
         model_names.append(prediction_path)
 
     for model_name in model_names:
-        logger.info(f"Evaluating {model_name}")
+        logger.info(f"Evaluating {model_name} on {len(sources)} samples.")
 
         if Path(model_name).suffix == ".csv":
             logger.info(f"Loading predictions from {model_name}...")

@@ -60,12 +60,12 @@ class OpenAISummarizer(InstructTunedSummarizer):
         )
         return response
 
-    def preprocess(self, text, truncation=True, **generation_kwargs):
+    def preprocess(self, text, truncation=True, max_length=None, **generation_kwargs):
         prompt, truncated_tokens, generation_kwargs = super().preprocess(
-            text, truncation=truncation, **generation_kwargs
+            text, truncation=truncation, max_length=max_length, **generation_kwargs
         )
-        max_tokens = generation_kwargs.pop("max_length", self.default_max_tokens())
-        generation_kwargs["max_tokens"] = max_tokens
+        generation_kwargs["max_tokens"] = max_length
+        generation_kwargs.pop("seed", None)
         return prompt, truncated_tokens, generation_kwargs
 
     def postprocess(self, summary):

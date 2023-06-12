@@ -127,13 +127,19 @@ class PromptBasedSummarizer(Summarizer):
     def default_article_prompt(self):
         return "Article: {article}"
 
-    def truncate_input(self, prompt, max_tokens, **kwargs):
+    def preprocess(self, text, truncation=True, max_length=None, **generation_kwargs):
+        max_tokens = generation_kwargs.pop("max_tokens", self.default_max_tokens())
+        if max_length:
+            max_tokens = max_tokens - max_length - 1
+        prompt, truncated_tokens, generation_kwargs = super().preprocess(
+            text, truncation=truncation, max_tokens=max_tokens, **generation_kwargs
+        )
+        return prompt, truncated_tokens, generation_kwargs
+
+    def truncate_input(self, prompt, max_tokens):
         # discount maximum output length from max_tokens
-        max_length = kwargs.get("max_length", 256)
-        max_tokens = max_tokens - max_length - 1
         num_tokens = self.num_tokens_for_prompt(prompt)
         excess_tokens = num_tokens - max_tokens
-
         # choose the longest message for truncation
         message_lengths = [len(m["content"]) for m in prompt]
         longest_idx = np.argmax(message_lengths)
