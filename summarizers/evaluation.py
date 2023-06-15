@@ -18,7 +18,7 @@ from .metrics import (
     save_scores,
     summarization_metrics,
 )
-from .utils import config_logging, get_output_path
+from .utils import config_logging, get_output_path, get_progress_bar, add_progress_task
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +72,7 @@ def evaluate(
     scores=None,
     save_to=None,
     n_samples=None,
+    parallelize=False,
     seed=17,
 ):
     # this seed is for confidence interval estimation via bootstrapping
@@ -80,18 +81,35 @@ def evaluate(
     _targets = targets[:n_samples]
     _sources = sources[:n_samples]
     doc_ids = list(range(len(_preds)))
-    results = p_map(
-        lambda pred, target, source, doc_id: eval_job(
-            pred,
-            target,
-            source,
-            doc_id,
-        ),
-        _preds,
-        _targets,
-        _sources,
-        doc_ids,
-    )
+
+    if parallelize:
+        results = p_map(
+            lambda pred, target, source, doc_id: eval_job(
+                pred,
+                target,
+                source,
+                doc_id,
+            ),
+            _preds,
+            _targets,
+            _sources,
+            doc_ids,
+        )
+
+    else:
+        items = list(zip(_preds, _targets, _sources, doc_ids))
+        progress = get_progress_bar()
+        task = add_progress_task(
+            progress,
+            f"Computing evaluation metrics...",
+            total=len(items),
+            existing_ok=False,
+        )
+        results = []
+        with progress:
+            for item in items:
+                results.append(eval_job(*item))
+                progress.update(task, advance=1)
 
     results, agg_scores = _aggregate_results(results, scores)
     log_metrics(agg_scores)
