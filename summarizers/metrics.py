@@ -190,21 +190,16 @@ def abstractiveness(source, summary):
 
 
 def text_statistics(text, prefix=None):
-    sentences_per_sample = []
-    tokens_per_sample = []
-    tokens_per_sentence = []
-    flesch_kincaid = []
-
     if isinstance(text, list):
         sentences = text
         text = "\n".join(text)
     else:
         sentences = sent_tokenize(text)
 
-    sentences_per_sample.append(len(sentences))
-    tokens_per_sentence.append(np.mean([len(word_tokenize(s)) for s in sentences]))
-    tokens_per_sample.append(len(word_tokenize(text)))
-    flesch_kincaid.append(textstat.flesch_kincaid_grade(text))
+    sentences_per_sample = len(sentences)
+    tokens_per_sentence = np.mean([len(word_tokenize(s)) for s in sentences])
+    tokens_per_sample = len(word_tokenize(text))
+    flesch_kincaid = textstat.flesch_kincaid_grade(text)
     statistics = dict(
         sentences_per_sample=sentences_per_sample,
         tokens_per_sentence=tokens_per_sentence,
@@ -238,16 +233,24 @@ def summarization_metrics(
     summary, target_summary=None, source=None, rouge_ngrams=None, verbose=False
 ):
     metrics = {}
+    if source is not None:
+        metrics["source_stats"] = text_statistics(source)
+        metrics["summary_abstractiveness"] = abstractiveness(source, summary)
+        metrics["target_abstractiveness"] = abstractiveness(source, target_summary)
+
     metrics["summary_stats"] = text_statistics(summary)
 
     if target_summary is not None:
         metrics["target_stats"] = text_statistics(target_summary)
+
+        metrics["conciseness"] = {}
+        for x in ["sentences", "tokens"]:
+            summary_val = metrics["summary_stats"][f"{x}_per_sample"]
+            target_val = metrics["target_stats"][f"{x}_per_sample"]
+            metrics["conciseness"][f"{x}_diff"] = abs(target_val - summary_val)
+
         rouge = rouge_score(summary, target_summary, rouge_ngrams=rouge_ngrams)
         metrics["rouge"] = [rouge]
-
-    if source is not None:
-        metrics["summary_abstractiveness"] = abstractiveness(source, summary)
-        metrics["target_abstractiveness"] = abstractiveness(source, target_summary)
 
     if verbose:
         log_metrics(metrics)
