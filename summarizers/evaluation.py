@@ -126,6 +126,23 @@ def evaluate(
     return scores
 
 
+def clean_arxiv_text(arxiv_text):
+    """
+    Removes content before introduction section using a simple heuristic.
+    """
+    lines = arxiv_text.split("\n")
+    idx = 0
+    for line in lines:
+        line = line.strip().lower()
+        if "introduction" in line and len(line.split(" ")) <= 2:
+            break
+        idx += 1
+    arxiv_text = None
+    if len(lines) > idx:
+        arxiv_text = "\n".join(lines[idx:])
+    return arxiv_text
+
+
 def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
     if isinstance(arxiv_id, list):
         arxiv_id = [str(x) for x in arxiv_id]
@@ -152,9 +169,13 @@ def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
         sort_by=SortCriterion.SubmittedDate,
         remove_abstract=True,
     )
+    texts = [clean_arxiv_text(p["text"]) for p in papers]
+    valid_idxs = [idx for idx, t in enumerate(texts) if t]
+    texts = [texts[idx] for idx in valid_idxs]
+    papers = [papers[idx] for idx in valid_idxs]
     eval_data = {
         "entry_id": [p["entry_id"] for p in papers],
-        source_key: [p["text"] for p in papers],
+        source_key: texts,
         target_key: [p["summary"] for p in papers],
     }
     return eval_data
