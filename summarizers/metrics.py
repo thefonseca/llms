@@ -185,7 +185,10 @@ def abstractiveness(source, summary):
         source_ngrams = list(ngrams(source.split(" "), n))
         summary_ngrams = list(ngrams(summary.split(" "), n))
         novel_ngrams = [x for x in summary_ngrams if x not in source_ngrams]
-        result[f"{n}_gram"] = len(novel_ngrams) / len(summary_ngrams)
+        if len(summary_ngrams):
+            result[f"{n}_gram"] = len(novel_ngrams) / len(summary_ngrams)
+        else:
+            result[f"{n}_gram"] = 0
     return result
 
 
