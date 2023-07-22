@@ -1,10 +1,12 @@
 import json
 import logging
 import os
+from pathlib import Path
 import re
 
 import arxiv
 from arxiv import SortCriterion, SortOrder
+import numpy as np
 import textdistance
 
 from .utils import get_cache_dir, add_progress_task, get_progress_bar, pdf_to_text
@@ -176,3 +178,58 @@ def search_arxiv(
                 progress.update(task, advance=1)
 
     return papers
+
+
+def clean_arxiv_text(arxiv_text):
+    """
+    Removes content before introduction section using a simple heuristic.
+    """
+    lines = arxiv_text.split("\n")
+    idx = 0
+    for line in lines:
+        line = line.strip().lower()
+        if "introduction" in line and len(line.split(" ")) <= 2:
+            break
+        idx += 1
+    arxiv_text = None
+    if len(lines) > idx:
+        arxiv_text = "\n".join(lines[idx:])
+    return arxiv_text
+
+
+def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
+    if isinstance(arxiv_id, list):
+        arxiv_id = [str(x) for x in arxiv_id]
+    else:
+        arxiv_id = str(arxiv_id)
+
+    logger.info(f"Arxiv IDs: {arxiv_id}")
+    logger.info(f"Arxiv query: {arxiv_query}")
+    if arxiv_id and Path(arxiv_id).suffix == ".txt":
+        arxiv_ids_file = arxiv_id
+        arxiv_id = np.loadtxt(arxiv_ids_file)
+        logger.info(f"Loaded {len(arxiv_id)} arXiv IDs from {arxiv_ids_file}")
+
+    if max_samples is None:
+        max_samples = float("inf")
+    else:
+        max_samples = int(max_samples * 1.1)
+
+    papers = search_arxiv(
+        arxiv_id,
+        arxiv_query,
+        # add 10% more samples as some of them will not be valid
+        max_results=max_samples,
+        sort_by=SortCriterion.SubmittedDate,
+        remove_abstract=True,
+    )
+    texts = [clean_arxiv_text(p["text"]) for p in papers]
+    valid_idxs = [idx for idx, t in enumerate(texts) if t]
+    texts = [texts[idx] for idx in valid_idxs]
+    papers = [papers[idx] for idx in valid_idxs]
+    eval_data = {
+        "entry_id": [p["entry_id"] for p in papers],
+        source_key: texts,
+        target_key: [p["summary"] for p in papers],
+    }
+    return eval_data

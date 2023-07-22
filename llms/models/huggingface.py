@@ -2,7 +2,7 @@ import logging
 import re
 
 from accelerate import infer_auto_device_map, init_empty_weights
-from fastchat.conversation import get_default_conv_template
+from fastchat.conversation import get_conv_template
 import torch
 from transformers import (
     AutoConfig,
@@ -13,13 +13,13 @@ from transformers import (
     LlamaForCausalLM,
 )
 
-from .base import Summarizer, PromptBasedSummarizer, InstructTunedSummarizer
-from ..memoizer import memoize
+from ..models.base import BaseLM, PromptBasedLM
+from ..utils.memoizer import memoize
 
 logger = logging.getLogger(__name__)
 
 
-class HFSummarizer(Summarizer):
+class HFModel(BaseLM):
     def __init__(
         self,
         model_name,
@@ -151,6 +151,25 @@ class HFSummarizer(Summarizer):
         logger.info(f"Using device map: {device_map}")
         return device_map
 
+    def process_generation_kwargs(self, max_length=None, **generation_kwargs):
+        if "max_new_tokens" not in generation_kwargs:
+            if max_length is None:
+                generation_config = self.load_generation_config()
+                if hasattr(generation_config, "max_length"):
+                    max_length = generation_config.max_length
+
+            generation_kwargs["max_new_tokens"] = max_length
+
+        generation_kwargs.pop("max_tokens", None)
+        return generation_kwargs
+
+    def preprocess(self, text, truncation=True, **generation_kwargs):
+        prompt, truncated_tokens, generation_kwargs = super().preprocess(
+            text, truncation=truncation, **generation_kwargs
+        )
+        generation_kwargs = self.process_generation_kwargs(**generation_kwargs)
+        return prompt, truncated_tokens, generation_kwargs
+
     @memoize(ignore_kwargs=["model_path"])
     def generate_cached(
         self,
@@ -161,6 +180,7 @@ class HFSummarizer(Summarizer):
         top_p=0.95,
         seed=42,
         keep_generated_only=False,
+        input_length_adjust=0,
         memoizer_ignore_cache=False,
         **kwargs,
     ):
@@ -199,17 +219,17 @@ class HFSummarizer(Summarizer):
                 top_p=top_p,
                 **generation_kwargs,
             )
-            summary = tokenizer.batch_decode(
+            output = tokenizer.batch_decode(
                 generated_ids.cpu(),
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=None,
             )[0]
             if isinstance(model_input, str) and keep_generated_only:
-                summary = summary[len(model_input) :]
-            return summary
+                output = output[len(model_input) + input_length_adjust :]
+            return output
 
 
-class Text2TextSummarizer(HFSummarizer):
+class Text2TextLM(HFModel):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
@@ -290,50 +310,23 @@ class Text2TextSummarizer(HFSummarizer):
 
         return input, truncated_tokens
 
-    def preprocess(
-        self,
-        text,
-        truncation=True,
-        max_length=None,
-        do_sample=None,
-        **generation_kwargs,
-    ):
-        model_input, truncated_tokens, generation_kwargs = super().preprocess(
-            text, truncation=truncation, **generation_kwargs
-        )
-        if max_length is None:
-            generation_config = self.load_generation_config()
-            if hasattr("max_length", generation_config):
-                max_length = generation_config.max_length
-
-        generation_kwargs["max_new_tokens"] = max_length
+    def process_generation_kwargs(self, do_sample=None, **generation_kwargs):
+        generation_kwargs = super().process_generation_kwargs(**generation_kwargs)
         if do_sample is None:
             generation_kwargs["do_sample"] = False
+        return generation_kwargs
 
-        config = self.load_model_config()
-        if hasattr(config, "task_specific_params"):
-            task_params = config.task_specific_params
-            if task_params and "summarization" in task_params:
-                for key, param in task_params["summarization"].items():
-                    if (
-                        key not in ["prefix", "max_length"]
-                        and key not in generation_kwargs
-                    ):
-                        generation_kwargs[key] = param
-
-        return model_input, truncated_tokens, generation_kwargs
-
-    def postprocess(self, summary):
+    def postprocess(self, output):
         # special newline postprocessing for some models
         if any(
             [x in self.model_path] for x in ["google/pegasus", "google/bigbird-pegasus"]
         ):
-            summary = summary.replace(".<n> ", ".\n ")
-        summary = super().postprocess(summary)
-        return summary
+            output = output.replace(".<n> ", ".\n ")
+        output = super().postprocess(output)
+        return output
 
 
-class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
+class CausalLM(HFModel):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
@@ -367,6 +360,26 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         self.model = model
         return model
 
+    def process_generation_kwargs(self, **generation_kwargs):
+        generation_kwargs = super().process_generation_kwargs(**generation_kwargs)
+        generation_kwargs["keep_generated_only"] = True
+        return generation_kwargs
+
+
+class InstructText2TextLM(PromptBasedLM, Text2TextLM):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
+
+    def truncate_input(self, prompt, max_tokens, **kwargs):
+        prompt, truncated_tokens = super().truncate_input(prompt, max_tokens, **kwargs)
+        prompt_text = self.prompt_to_text(prompt)
+        return prompt_text, truncated_tokens
+
+
+class InstructCausalLM(PromptBasedLM, CausalLM):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
+
     def preprocess(self, text, truncation=True, max_length=None, **generation_kwargs):
         prompt, truncated_tokens, generation_kwargs = super().preprocess(
             text, truncation=truncation, max_length=max_length, **generation_kwargs
@@ -378,48 +391,20 @@ class CausalLMSummarizer(PromptBasedSummarizer, HFSummarizer):
         else:
             max_new_tokens = max_length
         generation_kwargs["max_new_tokens"] = max_new_tokens
-        generation_kwargs["keep_generated_only"] = True
-        generation_kwargs.pop("max_tokens", None)
         prompt_text = self.prompt_to_text(prompt)
         return prompt_text, truncated_tokens, generation_kwargs
 
-    def postprocess(self, summary):
+    def postprocess(self, output):
         # special newline postprocessing for some models
         if "mosaicml/mpt-7b" in self.model_path:
-            summary = [s for s in re.split("[\n\s#]+$", summary) if len(s)]
-            summary = [re.sub("^[\n\s#]+", "", s.strip()).strip() for s in summary]
-            summary = "\n".join(summary)
-        summary = super().postprocess(summary)
-        return summary
+            output = [s for s in re.split("[\n\s#]+$", output) if len(s)]
+            output = [re.sub("^[\n\s#]+", "", s.strip()).strip() for s in output]
+            output = "\n".join(output)
+        output = super().postprocess(output)
+        return output
 
 
-class InstructCausalLMSummarizer(InstructTunedSummarizer, CausalLMSummarizer):
-    def __init__(self, model_name, **kwargs) -> None:
-        super().__init__(model_name, **kwargs)
-
-
-class InstructText2TextSummarizer(InstructTunedSummarizer, Text2TextSummarizer):
-    def __init__(self, model_name, **kwargs) -> None:
-        super().__init__(model_name, **kwargs)
-
-    def truncate_input(self, prompt, max_tokens, **kwargs):
-        prompt, truncated_tokens = super().truncate_input(prompt, max_tokens, **kwargs)
-        prompt_text = self.prompt_to_text(prompt)
-        return prompt_text, truncated_tokens
-
-
-class T5Summarizer(InstructText2TextSummarizer):
-    def __init__(self, model_name, **kwargs) -> None:
-        super().__init__(model_name, **kwargs)
-
-    def default_article_prompt(self):
-        return "summarize: {article}"
-
-    def default_task_prompt(self):
-        return None
-
-
-class AlpacaSummarizer(InstructCausalLMSummarizer):
+class Alpaca(InstructCausalLM):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
@@ -433,14 +418,51 @@ class AlpacaSummarizer(InstructCausalLMSummarizer):
         return prompt_text
 
 
-class VicunaSummarizer(InstructCausalLMSummarizer):
+class Vicuna(InstructCausalLM):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
     def prompt_to_text(self, prompt):
         prompt_text = super().prompt_to_text(prompt)
-        conv = get_default_conv_template("vicuna").copy()
+        conv = get_conv_template("vicuna_v1.1").copy()
         conv.append_message(conv.roles[0], prompt_text)
         conv.append_message(conv.roles[1], None)
         prompt_text = conv.get_prompt()
         return prompt_text
+
+
+class LlamaChat(InstructCausalLM):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
+
+    def default_max_tokens(self):
+        return 4096
+
+    def default_system_prompt(self):
+        return "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. "
+        "Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. "
+        "Please ensure that your responses are socially unbiased and positive in nature.\n\n"
+        "If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. "
+        "If you don't know the answer to a question, please don't share false information."
+
+    def prompt_to_text(self, prompt):
+        B_INST, E_INST = "[INST]", "[/INST]"
+        B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
+        system_prompt = [m for m in prompt if m["role"] == "system"]
+        user_message = [m for m in prompt if m["role"] == "user"]
+        user_message = "\n".join([m["content"] for m in user_message])
+
+        if system_prompt:
+            system_prompt = system_prompt[0]["content"]
+            prompt_text = (
+                f"<s>{B_INST} {B_SYS}{system_prompt}{E_SYS}{user_message} {E_INST}"
+            )
+        else:
+            prompt_text = f"<s>{B_INST} {user_message} {E_INST}"
+        return prompt_text
+
+    def process_generation_kwargs(self, do_sample=None, **generation_kwargs):
+        generation_kwargs = super().process_generation_kwargs(**generation_kwargs)
+        # account for the added '<s>' token in the prompt
+        generation_kwargs["input_length_adjust"] = -1
+        return generation_kwargs

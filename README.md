@@ -1,9 +1,9 @@
-# Summarizers
+# LLMs
 
-Summarizers is a tool to evaluate of summarization models. It implements a common API for traditional encoder-decoder and prompt-based large language models, as well as APIs such as OpenAI and Cohere.
+This is a tool to evaluate of large language models on diverse tasks. It implements a common API for traditional encoder-decoder and prompt-based large language models, as well as APIs such as OpenAI and Cohere.
 
 Currently, these functionalities are available:
-- Summarization prompting and truncation logic
+- Prompting and truncation logic
 - Support for vanilla LLMs ([OPT](https://arxiv.org/abs/2205.01068), [LLaMa](https://github.com/facebookresearch/llama)) and instruction-tuned models ([T0](https://github.com/bigscience-workshop/t-zero), [Alpaca](https://github.com/tatsu-lab/stanford_alpaca)) 
 - Evaluation based on [🤗 Datasets](https://github.com/huggingface/datasets) or CSV files
 - Memoization: inference outputs are cached on disk
@@ -11,15 +11,15 @@ Currently, these functionalities are available:
 
 ## Setup
 ```bash
-git clone https://github.com/thefonseca/summarizers.git
-cd summarizers && pip install -e .
+git clone https://github.com/thefonseca/llms.git
+cd llms && pip install -e .
 ```
 
 ## Examples
 Evaluating [BigBird](https://github.com/google-research/bigbird) on [PubMed](https://huggingface.co/datasets/scientific_papers) validation split, and saving the results on the `output` folder:
 
 ```bash
-python -m summarizers.evaluation \
+python -m llms.summarizers.evaluation \
 --dataset_name scientific_papers \
 --dataset_config pubmed \
 --split validation \
@@ -34,7 +34,7 @@ where `--model_name` is a [huggingface model identifier](https://huggingface.co/
 Evaluating [Alpaca](https://github.com/tatsu-lab/stanford_alpaca) (float16) on [arXiv](https://huggingface.co/datasets/scientific_papers) validation split:
 
 ```bash
-python -m summarizers.evaluation \
+python -m llms.summarizers.evaluation \
 --arxiv_id https://arxiv.org/abs/2304.15004v1 \
 --model_name alpaca-7b \
 --model_checkpoint_path path_to_alpaca_checkpoint \
@@ -53,7 +53,7 @@ Evaluating [ChatGPT API](https://platform.openai.com/docs/api-reference/chat) on
 
 ```bash
 export OPENAI_API_KEY=<your_api_key>
-python -m summarizers.evaluation \
+python -m llms.summarizers.evaluation \
 --dataset_name scientific_papers \
 --dataset_config arxiv \
 --split validation \
@@ -67,7 +67,7 @@ python -m summarizers.evaluation \
 Evaluating summary predictions from a CSV file:
 
 ```bash
-python -m summarizers.evaluation \
+python -m llms.summarizers.evaluation \
 --dataset_name scientific_papers \
 --dataset_config arxiv \
 --split validation \

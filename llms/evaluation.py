@@ -2,28 +2,32 @@ import logging
 import os
 from pathlib import Path
 
-from arxiv import SortCriterion
 import datasets
 import fire
 import numpy as np
 import pandas as pd
 from p_tqdm import p_map
 
-from .arxiv import search_arxiv, pdf_to_text
-from .inference import predict_summaries
+from .utils.arxiv import load_arxiv_data, pdf_to_text
+from .inference import generate
 from .metrics import (
     aggregate_metrics,
-    compute_metric,
+    compute_metrics,
     log_metrics,
     save_scores,
-    summarization_metrics,
+    generation_metrics,
 )
-from .utils import config_logging, get_output_path, get_progress_bar, add_progress_task
+from .utils.utils import (
+    config_logging,
+    get_output_path,
+    get_progress_bar,
+    add_progress_task,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def _aggregate_parallel_results(p_results):
+def _aggregate_parallel_scores(p_results):
     results = {}
     for result in p_results:
         for key in result.keys():
@@ -36,39 +40,47 @@ def _aggregate_parallel_results(p_results):
     return results
 
 
-def _aggregate_results(results, scores):
-    if type(results) == list:
-        results = _aggregate_parallel_results(results)
+def _aggregate_scores(p_scores, scores):
+    if isinstance(p_scores, list):
+        all_scores = _aggregate_parallel_scores(p_scores)
 
     if scores:
         for key in scores:
-            if key in results:
+            if key in all_scores:
                 logger.warning(f"Values for metric {key} already exist.")
-            results[key] = scores[key]
-    agg_scores = aggregate_metrics(results)
-    return results, agg_scores
+            all_scores[key] = scores[key]
+    agg_scores = aggregate_metrics(all_scores)
+    return all_scores, agg_scores
 
 
 def eval_job(
-    pred,
+    prediction,
     target,
     source,
     doc_id,
+    metrics,
 ):
     try:
         if target is None or str(target) == "nan" or len(target) == 0:
             return
     except:
-        logger.error(f"Invalid target summary: {target}")
+        logger.error(f"Invalid target: {target}")
 
-    metrics = summarization_metrics(pred, target_summary=target, source=source)
-    return metrics
+    scores = compute_metrics(
+        metrics,
+        [prediction],
+        sources=[source],
+        references=[target],
+        parallelized=True,
+    )
+    return scores
 
 
 def evaluate(
     preds,
     targets,
     sources,
+    metrics,
     scores=None,
     save_to=None,
     n_samples=None,
@@ -77,108 +89,62 @@ def evaluate(
 ):
     # this seed is for confidence interval estimation via bootstrapping
     np.random.seed(seed)
-    _preds = preds[:n_samples]
-    _targets = targets[:n_samples]
-    _sources = sources[:n_samples]
-    doc_ids = list(range(len(_preds)))
+    preds = preds[:n_samples]
+    targets = targets[:n_samples]
+    sources = sources[:n_samples]
+    doc_ids = list(range(len(preds)))
+
+    if metrics is None:
+        metrics = [generation_metrics]
+    if not isinstance(metrics, list):
+        metrics = [metrics]
+
+    def is_parallelizable_metric(m):
+        # non-dicts (e.g., callables) are parallelizable by default
+        return not isinstance(m, dict) or m.get("parallelizable", True)
 
     if parallelize:
-        results = p_map(
+        parallel_metrics = [m for m in metrics if is_parallelizable_metric(m)]
+        non_parallel_metrics = [m for m in metrics if not is_parallelizable_metric(m)]
+    else:
+        non_parallel_metrics = metrics
+        parallel_metrics = None
+
+    # compute non-parallelizable metrics
+    scores = compute_metrics(
+        non_parallel_metrics,
+        preds,
+        sources=sources,
+        references=targets,
+        parallelized=False,
+        verbose=True,
+    )
+
+    parallel_scores = []
+    if parallel_metrics:
+        parallel_scores = p_map(
             lambda pred, target, source, doc_id: eval_job(
-                pred,
-                target,
-                source,
-                doc_id,
+                pred, target, source, doc_id, parallel_metrics
             ),
-            _preds,
-            _targets,
-            _sources,
+            preds,
+            targets,
+            sources,
             doc_ids,
         )
 
-    else:
-        items = list(zip(_preds, _targets, _sources, doc_ids))
-        progress = get_progress_bar()
-        task = add_progress_task(
-            progress,
-            f"Computing evaluation metrics...",
-            total=len(items),
-            existing_ok=False,
-        )
-        results = []
-        with progress:
-            for item in items:
-                results.append(eval_job(*item))
-                progress.update(task, advance=1)
-
-    results, agg_scores = _aggregate_results(results, scores)
+    scores, agg_scores = _aggregate_scores(parallel_scores, scores)
     log_metrics(agg_scores)
 
     if save_to:
         filepath = Path(save_to)
         filepath.parent.mkdir(parents=True, exist_ok=True)
-        preds_df = pd.DataFrame({"prediction": _preds, "target": _targets})
+        preds_df = pd.DataFrame({"prediction": preds, "target": targets})
         preds_filename = f"{filepath.stem}_predictions.csv"
         preds_filename = filepath.parent / preds_filename
         preds_df.to_csv(preds_filename, index=False)
-        save_scores(results, agg_scores, save_to)
+        save_scores(scores, agg_scores, save_to)
 
     return scores
-
-
-def clean_arxiv_text(arxiv_text):
-    """
-    Removes content before introduction section using a simple heuristic.
-    """
-    lines = arxiv_text.split("\n")
-    idx = 0
-    for line in lines:
-        line = line.strip().lower()
-        if "introduction" in line and len(line.split(" ")) <= 2:
-            break
-        idx += 1
-    arxiv_text = None
-    if len(lines) > idx:
-        arxiv_text = "\n".join(lines[idx:])
-    return arxiv_text
-
-
-def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
-    if isinstance(arxiv_id, list):
-        arxiv_id = [str(x) for x in arxiv_id]
-    else:
-        arxiv_id = str(arxiv_id)
-
-    logger.info(f"Arxiv IDs: {arxiv_id}")
-    logger.info(f"Arxiv query: {arxiv_query}")
-    if arxiv_id and Path(arxiv_id).suffix == ".txt":
-        arxiv_ids_file = arxiv_id
-        arxiv_id = np.loadtxt(arxiv_ids_file)
-        logger.info(f"Loaded {len(arxiv_id)} arXiv IDs from {arxiv_ids_file}")
-
-    if max_samples is None:
-        max_samples = float("inf")
-    else:
-        max_samples = int(max_samples * 1.1)
-
-    papers = search_arxiv(
-        arxiv_id,
-        arxiv_query,
-        # add 10% more samples as some of them will not be valid
-        max_results=max_samples,
-        sort_by=SortCriterion.SubmittedDate,
-        remove_abstract=True,
-    )
-    texts = [clean_arxiv_text(p["text"]) for p in papers]
-    valid_idxs = [idx for idx, t in enumerate(texts) if t]
-    texts = [texts[idx] for idx in valid_idxs]
-    papers = [papers[idx] for idx in valid_idxs]
-    eval_data = {
-        "entry_id": [p["entry_id"] for p in papers],
-        source_key: texts,
-        target_key: [p["summary"] for p in papers],
-    }
-    return eval_data
 
 
 def evaluate_model(
@@ -191,7 +157,7 @@ def evaluate_model(
     arxiv_id=None,
     arxiv_query=None,
     model_name=None,
-    summarizer_class=None,
+    model_class=None,
     prediction_path=None,
     prediction_key="prediction",
     max_samples=None,
@@ -203,6 +169,7 @@ def evaluate_model(
     metrics=None,
     run_id=None,
     timestr=None,
+    parallelize=False,
     **kwargs,
 ):
     if arxiv_id or arxiv_query:
@@ -285,18 +252,18 @@ def evaluate_model(
 
         if Path(model_name).suffix == ".csv":
             logger.info(f"Loading predictions from {model_name}...")
-            summary_data = pd.read_csv(model_name)
-            preds = summary_data[prediction_key].values[:max_samples]
-            if len(preds) != len(sources):
+            prediction_data = pd.read_csv(model_name)
+            predictions = prediction_data[prediction_key].values[:max_samples]
+            if len(predictions) != len(sources):
                 raise ValueError(
-                    f"Number of predictions from {model_name} ({len(summary_data)}) "
+                    f"Number of predictions from {model_name} ({len(prediction_data)}) "
                     f"is incompatible with number of source documents ({len(sources)})."
                 )
         else:
-            preds = predict_summaries(
+            predictions = generate(
                 model_name,
                 sources,
-                summarizer_class=summarizer_class,
+                model_class=model_class,
                 cache_start=cache_start,
                 cache_end=cache_end,
                 **kwargs,
@@ -305,48 +272,37 @@ def evaluate_model(
         def is_valid_pred(pred):
             return pred and str(pred) != "nan"
 
-        valid_pred_idxs = [idx for idx, pred in enumerate(preds) if is_valid_pred(pred)]
-        if len(valid_pred_idxs) < len(preds):
+        valid_pred_idxs = [
+            idx for idx, pred in enumerate(predictions) if is_valid_pred(pred)
+        ]
+        if len(valid_pred_idxs) < len(predictions):
             logger.warning(
-                f"Found {len(preds) - len(valid_pred_idxs)} predictions with no content"
+                f"Found {len(predictions) - len(valid_pred_idxs)} predictions with no content"
             )
-            preds = [preds[idx] for idx in valid_pred_idxs]
+            predictions = [predictions[idx] for idx in valid_pred_idxs]
             targets = [targets[idx] for idx in valid_pred_idxs]
 
-        scores = None
-        if metrics:
-            scores = {}
-            for metric_name, metric in metrics.items():
-                metric_kwargs = metric.get("metric_kwargs", {})
-                metric_scores = compute_metric(
-                    targets,
-                    preds,
-                    metric["metric_fn"],
-                    **metric_kwargs,
-                )
-                scores[metric_name] = metric_scores
-
-        if targets is not None and len(targets):
-            save_to = get_output_path(
-                output_dir,
-                dataset_name,
-                dataset_config,
-                split,
-                model_name=model_name,
-                timestr=timestr,
-                run_id=run_id,
-            )
-            _kwargs = {}
-            if "seed" in kwargs:
-                _kwargs["seed"] = kwargs.get("seed")
-            evaluate(
-                preds,
-                targets,
-                sources,
-                scores=scores,
-                save_to=save_to,
-                **_kwargs,
-            )
+        save_to = get_output_path(
+            output_dir,
+            dataset_name,
+            dataset_config,
+            split,
+            model_name=model_name,
+            timestr=timestr,
+            run_id=run_id,
+        )
+        _kwargs = {}
+        if "seed" in kwargs:
+            _kwargs["seed"] = kwargs.get("seed")
+        evaluate(
+            predictions,
+            targets,
+            sources,
+            metrics,
+            save_to=save_to,
+            parallelize=parallelize,
+            **_kwargs,
+        )
 
 
 if __name__ == "__main__":

@@ -3,13 +3,13 @@ import os
 import openai
 import tiktoken
 
-from .base import InstructTunedSummarizer
-from ..memoizer import memoize
+from .base import PromptBasedLM
+from ..utils.memoizer import memoize
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
-class OpenAISummarizer(InstructTunedSummarizer):
+class OpenAIChat(PromptBasedLM):
     def __init__(self, model_name, request_interval=30, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
         self.tokenizer = self.load_tokenizer()
@@ -68,7 +68,7 @@ class OpenAISummarizer(InstructTunedSummarizer):
         generation_kwargs.pop("seed", None)
         return prompt, truncated_tokens, generation_kwargs
 
-    def postprocess(self, summary):
-        summary = summary["choices"][0]["message"]["content"]
-        summary = super().postprocess(summary)
-        return summary
+    def postprocess(self, output):
+        output = output["choices"][0]["message"]["content"]
+        output = super().postprocess(output)
+        return output

@@ -3,12 +3,12 @@ from pprint import pformat
 
 import numpy as np
 
-from ..utils import sent_tokenize, get_progress_bar, add_progress_task, log
+from ..utils.utils import sent_tokenize, get_progress_bar, add_progress_task, log
 
 logger = logging.getLogger(__name__)
 
 
-class Summarizer:
+class BaseLM:
     def __init__(self, model_name) -> None:
         self.model_name = model_name
 
@@ -69,10 +69,9 @@ class Summarizer:
 
         return model_input, truncated_tokens, generation_kwargs
 
-    def postprocess(self, summary):
-        # rougeLSum expects newline after each sentence
-        summary = "\n".join([s.strip() for s in sent_tokenize(summary)])
-        return summary
+    def postprocess(self, output):
+        output = "\n".join([s.strip() for s in sent_tokenize(output)])
+        return output
 
     def generate(
         self,
@@ -91,10 +90,10 @@ class Summarizer:
         log(logger, gen_kwargs_str, verbose=verbose)
         kwargs.update(generation_kwargs)
         log(logger, f"Model input:\n{pformat(model_input)}", verbose=verbose)
-        summary = self.generate_cached(self.model_name, model_input, **kwargs)
-        summary = self.postprocess(summary)
-        log(logger, f"Summary:\n{pformat(summary)}", verbose=verbose, max_length=None)
-        return summary
+        output = self.generate_cached(self.model_name, model_input, **kwargs)
+        output = self.postprocess(output)
+        log(logger, f"Output:\n{pformat(output)}", verbose=verbose, max_length=None)
+        return output
 
     def is_last_result_from_cache(self):
         is_cache_hit = hasattr(
@@ -103,29 +102,34 @@ class Summarizer:
         return is_cache_hit
 
 
-class PromptBasedSummarizer(Summarizer):
+class PromptBasedLM(BaseLM):
     def __init__(
         self,
         model_name,
         system_prompt=None,
-        article_prompt=None,
+        input_prompt=None,
         task_prompt=None,
         **kwargs,
     ) -> None:
         super().__init__(model_name, **kwargs)
-        if article_prompt is None:
-            article_prompt = self.default_article_prompt()
+        if input_prompt is None:
+            input_prompt = self.default_input_prompt()
         if task_prompt is None:
             task_prompt = self.default_task_prompt()
-        self.system_prompt = system_prompt
-        self.article_prompt = article_prompt
+        if system_prompt is None:
+            system_prompt = self.default_system_prompt()
+        self.input_prompt = input_prompt
         self.task_prompt = task_prompt
+        self.system_prompt = system_prompt
+
+    def default_system_prompt(self):
+        return None
 
     def default_task_prompt(self):
-        return "TL;DR:"
+        return None
 
-    def default_article_prompt(self):
-        return "Article: {article}"
+    def default_input_prompt(self):
+        return "{input}"
 
     def preprocess(self, text, truncation=True, max_length=None, **generation_kwargs):
         max_tokens = generation_kwargs.pop("max_tokens", self.default_max_tokens())
@@ -162,17 +166,17 @@ class PromptBasedSummarizer(Summarizer):
 
     def build_input(
         self,
-        text,
+        input_text,
         system_prompt=None,
-        article_prompt=None,
+        input_prompt=None,
         task_prompt=None,
         budget=6,
         budget_unit="sentences",
         verbose=False,
         **generation_kwargs,
     ):
-        if article_prompt is None:
-            article_prompt = self.article_prompt
+        if input_prompt is None:
+            input_prompt = self.input_prompt
         if task_prompt is None:
             task_prompt = self.task_prompt
         if system_prompt is None:
@@ -183,21 +187,26 @@ class PromptBasedSummarizer(Summarizer):
             budget_unit = budget_unit[:-1]
 
         prompt_args = dict(
-            article=text, budget=budget, budget_unit=budget_unit, **generation_kwargs
+            input=input_text,
+            budget=budget,
+            budget_unit=budget_unit,
+            **generation_kwargs,
         )
-        article_prompt = article_prompt.format(**prompt_args)
         prompt = []
 
         if system_prompt:
             prompt.append({"role": "system", "content": system_prompt})
-        prompt.append({"role": "user", "content": article_prompt})
+
+        if input_prompt:
+            input_prompt = input_prompt.format(**prompt_args)
+            prompt.append({"role": "user", "content": input_prompt})
 
         if task_prompt:
             task_prompt = task_prompt.format(**prompt_args)
             prompt.append({"role": "user", "content": task_prompt})
 
         log(logger, f"System prompt: {pformat(system_prompt)}", verbose=verbose)
-        log(logger, f"Article prompt: {pformat(article_prompt)}", verbose=verbose)
+        log(logger, f"Input prompt: {pformat(input_prompt)}", verbose=verbose)
         log(logger, f"Task prompt: {pformat(task_prompt)}", verbose=verbose)
         return prompt, generation_kwargs
 
@@ -255,11 +264,3 @@ class PromptBasedSummarizer(Summarizer):
 
     def prompt_to_text(self, prompt):
         return "\n".join([m["content"] for m in prompt])
-
-
-class InstructTunedSummarizer(PromptBasedSummarizer):
-    def __init__(self, model_name, **kwargs) -> None:
-        super().__init__(model_name, **kwargs)
-
-    def default_task_prompt(self):
-        return "Write a summary of the article above in {budget} {budget_unit}."

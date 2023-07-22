@@ -3,12 +3,12 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "summarizers"
+name = "llms"
 version = "0.0.1"
 authors = [
   { name="Marcio Fonseca", email="thefonseca@gmail.com" },
 ]
-description = "An evaluation tool for summarization models"
+description = "An evaluation tool for language models"
 readme = "README.md"
 requires-python = ">=3.7"
 classifiers = [
@@ -41,9 +41,9 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/thefonseca/summarizers"
-"Bug Tracker" = "https://github.com/thefonseca/summarizers/issues"
+"Homepage" = "https://github.com/thefonseca/llms"
+"Bug Tracker" = "https://github.com/thefonseca/llms/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["summarizers*"]
+include = ["llms*"]

@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def get_cache_dir(key=None):
     home_dir = os.getenv("HOME", ".")
-    cache_dir = os.path.join(home_dir, ".cache", "summarizers")
+    cache_dir = os.path.join(home_dir, ".cache", "llms")
     if key:
         cache_dir = os.path.join(cache_dir, key)
     return cache_dir
