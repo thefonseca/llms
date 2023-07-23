@@ -1,10 +1,38 @@
 import logging
 from pprint import pformat
+import re
 import time
 
+from .models.huggingface import (
+    Text2TextLM,
+    CausalLM,
+    LlamaChat,
+    InstructText2TextLM,
+    InstructCausalLM,
+    Alpaca,
+    Vicuna,
+)
+from .models.openai import OpenAIChat
 from .utils.utils import get_progress_bar, add_progress_task
 
 logger = logging.getLogger(__name__)
+
+
+DEFAULT_MODEL_MAP = {
+    "gpt-[-\d\w]*": OpenAIChat,
+    "facebook/opt-[\d\w]+": CausalLM,
+    ".*llama-?2.*chat.*": LlamaChat,
+    ".*llama.*": CausalLM,
+    "bigscience/T0[_\d\w]*": InstructText2TextLM,
+    "google/flan-t5[-\d\w]+": InstructText2TextLM,
+    "google/long-t5[-\d\w]+": InstructText2TextLM,
+    ".*alpaca.*": Alpaca,
+    ".*vicuna.*": Vicuna,
+    "mosaicml/mpt[-\d\w]$": CausalLM,
+    "tiiuae/falcon[-\d\w]$": CausalLM,
+    "mosaicml/mpt[-\d\w]+instruct": Alpaca,
+    "tiiuae/falcon[-\d\w]+instruct": InstructCausalLM,
+}
 
 
 def parse_kwargs(kwargs, model_prefix="model_"):
@@ -21,10 +49,24 @@ def parse_kwargs(kwargs, model_prefix="model_"):
     return model_kwargs, generation_kwargs
 
 
+def generator_for_model(model_name, model_map=None):
+    if model_map is None:
+        model_map = DEFAULT_MODEL_MAP
+
+    for key, val in model_map.items():
+        if re.match(key, model_name):
+            summarizer_class = val
+            break
+    else:
+        summarizer_class = Text2TextLM
+
+    return summarizer_class
+
+
 def generate(
     model_name,
     sources,
-    model_class,
+    model_class=None,
     max_length=256,
     cache_start=0,
     cache_end=None,
@@ -41,6 +83,9 @@ def generate(
     )
     cache_end = cache_end if cache_end is not None else len(sources)
     model_kwargs, generation_kwargs = parse_kwargs(kwargs)
+
+    if model_class is None:
+        model_class = generator_for_model(model_name)
 
     logger.info(f"Using model: {model_class}")
     model = model_class(model_name, **model_kwargs)
