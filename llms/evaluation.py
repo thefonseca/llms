@@ -61,7 +61,7 @@ def eval_job(
     metrics,
 ):
     try:
-        if target is None or str(target) == "nan" or len(target) == 0:
+        if target is not None and str(target) == "nan" and len(target) == 0:
             return
     except:
         logger.error(f"Invalid target: {target}")
@@ -78,9 +78,9 @@ def eval_job(
 
 def evaluate(
     preds,
-    targets,
     sources,
     metrics,
+    targets=None,
     scores=None,
     save_to=None,
     n_samples=None,
@@ -90,9 +90,12 @@ def evaluate(
     # this seed is for confidence interval estimation via bootstrapping
     np.random.seed(seed)
     preds = preds[:n_samples]
-    targets = targets[:n_samples]
     sources = sources[:n_samples]
     doc_ids = list(range(len(preds)))
+    if targets:
+        _targets = targets[:n_samples]
+    else:
+        _targets = [None] * len(preds)
 
     if metrics is None:
         metrics = [generation_metrics]
@@ -127,7 +130,7 @@ def evaluate(
                 pred, target, source, doc_id, parallel_metrics
             ),
             preds,
-            targets,
+            _targets,
             sources,
             doc_ids,
         )
@@ -138,7 +141,10 @@ def evaluate(
     if save_to:
         filepath = Path(save_to)
         filepath.parent.mkdir(parents=True, exist_ok=True)
-        preds_df = pd.DataFrame({"prediction": preds, "target": targets})
+        preds_dict = {"prediction": preds}
+        if targets:
+            preds_dict["reference"] = targets
+        preds_df = pd.DataFrame(preds_dict)
         preds_filename = f"{filepath.stem}_predictions.csv"
         preds_filename = filepath.parent / preds_filename
         preds_df.to_csv(preds_filename, index=False)
@@ -152,7 +158,7 @@ def evaluate_model(
     dataset_config=None,
     split=None,
     source_key="article",
-    target_key="abstract",
+    target_key=None,
     source_file=None,
     arxiv_id=None,
     arxiv_query=None,
@@ -222,7 +228,12 @@ def evaluate_model(
         eval_data = eval_data[split]
 
     sources = eval_data[source_key]
-    targets = eval_data[target_key]
+    targets = None
+    if target_key:
+        try:
+            targets = eval_data[target_key]
+        except:
+            logger.warning(f"Target '{target_key}' not found in dataset")
 
     if shuffle:
         seed = kwargs.get("seed")
@@ -231,10 +242,12 @@ def evaluate_model(
         idxs = list(range(len(sources)))
         np.random.shuffle(idxs)
         sources = [sources[idx] for idx in idxs]
-        targets = [targets[idx] for idx in idxs]
+        if targets:
+            targets = [targets[idx] for idx in idxs]
 
     sources = sources[:max_samples]
-    targets = targets[:max_samples]
+    if targets:
+        targets = targets[:max_samples]
 
     model_names = []
     if model_name and isinstance(model_name, (list, tuple)):
@@ -280,7 +293,8 @@ def evaluate_model(
                 f"Found {len(predictions) - len(valid_pred_idxs)} predictions with no content"
             )
             predictions = [predictions[idx] for idx in valid_pred_idxs]
-            targets = [targets[idx] for idx in valid_pred_idxs]
+            if targets:
+                targets = [targets[idx] for idx in valid_pred_idxs]
 
         save_to = get_output_path(
             output_dir,
@@ -296,9 +310,9 @@ def evaluate_model(
             _kwargs["seed"] = kwargs.get("seed")
         evaluate(
             predictions,
-            targets,
             sources,
             metrics,
+            targets=targets,
             save_to=save_to,
             parallelize=parallelize,
             **_kwargs,
