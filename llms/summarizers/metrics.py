@@ -1,4 +1,4 @@
-from ..metrics import generation_metrics, rouge_score
+from ..metrics import generation_metrics, rouge_score, abstractiveness
 
 
 def summarization_metrics(
@@ -7,6 +7,11 @@ def summarization_metrics(
     metrics = generation_metrics(
         prediction, reference=reference, source=source, parallelized=parallelized
     )
+
+    if source is not None:
+        metrics["prediction_abstractiveness"] = abstractiveness(source, prediction)
+        if reference is not None:
+            metrics["reference_abstractiveness"] = abstractiveness(source, reference)
 
     if reference is not None:
         rouge = rouge_score(prediction, reference, rouge_ngrams=rouge_ngrams)

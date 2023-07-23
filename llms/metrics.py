@@ -265,8 +265,6 @@ def generation_metrics(prediction, reference=None, source=None, parallelized=Fal
     metrics = {}
     if source is not None:
         metrics["source_stats"] = text_statistics(source)
-        metrics["prediction_abstractiveness"] = abstractiveness(source, prediction)
-        metrics["reference_abstractiveness"] = abstractiveness(source, reference)
 
     metrics["prediction_stats"] = text_statistics(prediction)
 
@@ -343,7 +341,7 @@ def compute_metrics(
 
         metric_name = metric.get("metric_name")
         metric_kwargs = metric.get("metric_kwargs", {})
-        if sources and metric.get("include_sources", True):
+        if sources is not None and metric.get("include_sources", True):
             metric_kwargs["sources"] = sources
 
         metric_scores = compute_metric(
