@@ -52,14 +52,16 @@ class BaseLM:
     def cached_generation_fn(self):
         return self.generate_cached
 
-    def build_input(self, text, verbose=False, **kwargs):
-        return text, kwargs
+    def build_input(self, input_data, verbose=False, **kwargs):
+        return input_data, kwargs
 
-    def preprocess(self, text, truncation=True, verbose=False, **generation_kwargs):
-        if isinstance(text, list):
-            text = "\n".join(text)
+    def preprocess(
+        self, input_data, truncation=True, verbose=False, **generation_kwargs
+    ):
+        if isinstance(input_data, list):
+            input_data = "\n".join(input_data)
         model_input, generation_kwargs = self.build_input(
-            text, verbose=verbose, **generation_kwargs
+            input_data, verbose=verbose, **generation_kwargs
         )
         truncated_tokens = 0
         if truncation:
@@ -75,13 +77,13 @@ class BaseLM:
 
     def generate(
         self,
-        text,
+        input_data,
         truncation=True,
         verbose=False,
         **generation_kwargs,
     ):
         model_input, _, generation_kwargs = self.preprocess(
-            text, truncation=truncation, verbose=verbose, **generation_kwargs
+            input_data, truncation=truncation, verbose=verbose, **generation_kwargs
         )
         model_kwargs = self.get_model_kwargs()
         kwargs = model_kwargs.copy()
@@ -131,12 +133,20 @@ class PromptBasedLM(BaseLM):
     def default_input_prompt(self):
         return "{input}"
 
-    def preprocess(self, text, truncation=True, max_length=None, **generation_kwargs):
+    def get_prompt_args(self):
+        return {}
+
+    def preprocess(
+        self, input_data, truncation=True, max_length=None, **generation_kwargs
+    ):
         max_tokens = generation_kwargs.pop("max_tokens", self.default_max_tokens())
         if max_length:
             max_tokens = max_tokens - max_length - 1
         prompt, truncated_tokens, generation_kwargs = super().preprocess(
-            text, truncation=truncation, max_tokens=max_tokens, **generation_kwargs
+            input_data,
+            truncation=truncation,
+            max_tokens=max_tokens,
+            **generation_kwargs,
         )
         return prompt, truncated_tokens, generation_kwargs
 
@@ -166,7 +176,7 @@ class PromptBasedLM(BaseLM):
 
     def build_input(
         self,
-        input_text,
+        input_data,
         system_prompt=None,
         input_prompt=None,
         task_prompt=None,
@@ -187,14 +197,21 @@ class PromptBasedLM(BaseLM):
             budget_unit = budget_unit[:-1]
 
         prompt_args = dict(
-            input=input_text,
             budget=budget,
             budget_unit=budget_unit,
             **generation_kwargs,
         )
+        prompt_args = dict(prompt_args, **self.get_prompt_args())
+
+        if isinstance(input_data, dict):
+            prompt_args = dict(prompt_args, **input_data)
+        else:
+            prompt_args["input"] = input_data
+
         prompt = []
 
         if system_prompt:
+            system_prompt = system_prompt.format(**prompt_args)
             prompt.append({"role": "system", "content": system_prompt})
 
         if input_prompt:
@@ -219,9 +236,9 @@ class PromptBasedLM(BaseLM):
             num_tokens += len(tokenizer.encode(message["content"]))
         return num_tokens
 
-    def token_statistics_for_input(self, text, truncation, **generation_kwargs):
+    def token_statistics_for_input(self, input_data, truncation, **generation_kwargs):
         prompt, truncated_tokens, _ = self.preprocess(
-            text, truncation=truncation, **generation_kwargs
+            input_data, truncation=truncation, **generation_kwargs
         )
         tokenizer = self.load_tokenizer()
         if not isinstance(prompt, str):
@@ -231,7 +248,7 @@ class PromptBasedLM(BaseLM):
 
     def token_statistics(
         self,
-        texts,
+        inputs,
         truncation=True,
         **generation_kwargs,
     ):
@@ -239,16 +256,16 @@ class PromptBasedLM(BaseLM):
         task = add_progress_task(
             progress,
             f"Calculating token statistics for {self.model_name}...",
-            total=len(texts),
+            total=len(inputs),
             existing_ok=False,
         )
         truncated_tokens = []
         num_tokens = []
 
         with progress:
-            for text in texts:
+            for input_data in inputs:
                 result = self.token_statistics_for_input(
-                    text, truncation, **generation_kwargs
+                    input_data, truncation, **generation_kwargs
                 )
                 num_tokens.append(result[0])
                 truncated_tokens.append(result[1])
