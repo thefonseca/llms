@@ -49,7 +49,7 @@ def parse_kwargs(kwargs, model_prefix="model_"):
     return model_kwargs, generation_kwargs
 
 
-def generator_for_model(model_name, model_map=None):
+def get_model_class(model_name, model_map=None, default_class=None):
     if model_map is None:
         model_map = DEFAULT_MODEL_MAP
 
@@ -58,7 +58,11 @@ def generator_for_model(model_name, model_map=None):
             summarizer_class = val
             break
     else:
-        summarizer_class = Text2TextLM
+        logger.warning(f"Could not match model '{model_name}' to generator class")
+        if default_class:
+            summarizer_class = default_class
+        else:
+            summarizer_class = Text2TextLM
 
     return summarizer_class
 
@@ -85,7 +89,7 @@ def generate(
     model_kwargs, generation_kwargs = parse_kwargs(kwargs)
 
     if model_class is None:
-        model_class = generator_for_model(model_name)
+        model_class = get_model_class(model_name)
 
     logger.info(f"Using model: {model_class}")
     model = model_class(model_name, **model_kwargs)

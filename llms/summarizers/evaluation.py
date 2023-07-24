@@ -1,10 +1,10 @@
 import logging
 import os
-import re
 
 import fire
 
 from ..evaluation import evaluate_model
+from ..inference import get_model_class
 from .metrics import summarization_metrics
 
 from .huggingface import (
@@ -22,39 +22,31 @@ from .cohere import CohereSummarizer
 logger = logging.getLogger(__name__)
 
 
-def summarizer_for_model(model_name):
-    summarizer_map = {
-        "gpt-[-\d\w]*": OpenAISummarizer,
-        "facebook/opt-[\d\w]+": CausalLMSummarizer,
-        ".*llama-?2.*chat.*": LlamaSummarizer,
-        ".*llama.*": CausalLMSummarizer,
-        "bigscience/T0[_\d\w]*": InstructText2TextSummarizer,
-        "google/flan-t5[-\d\w]+": InstructText2TextSummarizer,
-        "google/long-t5[-\d\w]+": InstructText2TextSummarizer,
-        ".*alpaca.*": AlpacaSummarizer,
-        ".*vicuna.*": VicunaSummarizer,
-        "summarize-((medium)|(xlarge))": CohereSummarizer,
-        "mosaicml/mpt[-\d\w]$": CausalLMSummarizer,
-        "tiiuae/falcon[-\d\w]$": CausalLMSummarizer,
-        "mosaicml/mpt[-\d\w]+instruct": AlpacaSummarizer,
-        "tiiuae/falcon[-\d\w]+instruct": InstructCausalLMSummarizer,
-    }
-
-    for key, val in summarizer_map.items():
-        if re.match(key, model_name):
-            summarizer_class = val
-            break
-    else:
-        summarizer_class = Text2TextSummarizer
-
-    return summarizer_class
+MODEL_MAP = {
+    "gpt-[-\d\w]*": OpenAISummarizer,
+    "facebook/opt-[\d\w]+": CausalLMSummarizer,
+    ".*llama-?2.*chat.*": LlamaSummarizer,
+    ".*llama.*": CausalLMSummarizer,
+    "bigscience/T0[_\d\w]*": InstructText2TextSummarizer,
+    "google/flan-t5[-\d\w]+": InstructText2TextSummarizer,
+    "google/long-t5[-\d\w]+": InstructText2TextSummarizer,
+    ".*alpaca.*": AlpacaSummarizer,
+    ".*vicuna.*": VicunaSummarizer,
+    "summarize-((medium)|(xlarge))": CohereSummarizer,
+    "mosaicml/mpt[-\d\w]$": CausalLMSummarizer,
+    "tiiuae/falcon[-\d\w]$": CausalLMSummarizer,
+    "mosaicml/mpt[-\d\w]+instruct": AlpacaSummarizer,
+    "tiiuae/falcon[-\d\w]+instruct": InstructCausalLMSummarizer,
+}
 
 
 def evaluate_summarizer(model_name=None, **kwargs):
-    summarizer_class = summarizer_for_model(model_name)
+    model_class = get_model_class(
+        model_name, model_map=MODEL_MAP, default_class=Text2TextSummarizer
+    )
     evaluate_model(
         model_name=model_name,
-        model_class=summarizer_class,
+        model_class=model_class,
         metrics=summarization_metrics,
         **kwargs,
     )
