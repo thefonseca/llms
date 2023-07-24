@@ -269,6 +269,8 @@ def generation_metrics(prediction, reference=None, source=None, parallelized=Fal
     metrics["prediction_stats"] = text_statistics(prediction)
 
     if reference is not None:
+        if str(reference) == "nan":
+            reference = "None"
         metrics["reference_stats"] = text_statistics(reference)
 
         metrics["length_diff"] = {}

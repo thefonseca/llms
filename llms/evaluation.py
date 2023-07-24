@@ -92,7 +92,7 @@ def evaluate(
     preds = preds[:n_samples]
     sources = sources[:n_samples]
     doc_ids = list(range(len(preds)))
-    if targets:
+    if targets is not None:
         _targets = targets[:n_samples]
     else:
         _targets = [None] * len(preds)
@@ -142,7 +142,7 @@ def evaluate(
         filepath = Path(save_to)
         filepath.parent.mkdir(parents=True, exist_ok=True)
         preds_dict = {"prediction": preds}
-        if targets:
+        if targets is not None:
             preds_dict["reference"] = targets
         preds_df = pd.DataFrame(preds_dict)
         preds_filename = f"{filepath.stem}_predictions.csv"
@@ -242,11 +242,11 @@ def evaluate_model(
         idxs = list(range(len(sources)))
         np.random.shuffle(idxs)
         sources = [sources[idx] for idx in idxs]
-        if targets:
+        if targets is not None:
             targets = [targets[idx] for idx in idxs]
 
     sources = sources[:max_samples]
-    if targets:
+    if targets is not None:
         targets = targets[:max_samples]
 
     model_names = []
@@ -293,7 +293,7 @@ def evaluate_model(
                 f"Found {len(predictions) - len(valid_pred_idxs)} predictions with no content"
             )
             predictions = [predictions[idx] for idx in valid_pred_idxs]
-            if targets:
+            if targets is not None:
                 targets = [targets[idx] for idx in valid_pred_idxs]
 
         save_to = get_output_path(
