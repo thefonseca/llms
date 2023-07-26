@@ -408,13 +408,22 @@ class Alpaca(InstructCausalLM):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
-    def prompt_to_text(self, prompt):
-        prompt_text = super().prompt_to_text(prompt)
-        prompt_text = (
+    def default_system_prompt(self):
+        return (
             "Below is an instruction that describes a task. "
             "Write a response that appropriately completes the request.\n\n"
-            "### Instruction:\n{}\n\n### Response:"
-        ).format(prompt_text)
+        )
+
+    def prompt_to_text(self, prompt):
+        system_prompt = [m for m in prompt if m["role"] == "system"]
+        user_message = [m for m in prompt if m["role"] == "user"]
+        prompt_text = "\n".join([m["content"] for m in user_message])
+
+        if system_prompt:
+            system_prompt = system_prompt[0]["content"]
+            prompt_text = (
+                f"{system_prompt}### Instruction:\n{user_message}\n\n### Response:"
+            )
         return prompt_text
 
 
@@ -461,8 +470,10 @@ class LlamaChat(InstructCausalLM):
             prompt_text = f"<s>{B_INST} {user_message} {E_INST}"
         return prompt_text
 
-    def process_generation_kwargs(self, do_sample=None, **generation_kwargs):
+    def process_generation_kwargs(self, **generation_kwargs):
         generation_kwargs = super().process_generation_kwargs(**generation_kwargs)
         # account for the added '<s>' token in the prompt
         generation_kwargs["input_length_adjust"] = -1
+        if "temperature" not in generation_kwargs:
+            generation_kwargs["temperature"] = 0.8
         return generation_kwargs

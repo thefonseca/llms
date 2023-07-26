@@ -9,13 +9,15 @@ class PromptBasedSummarizer(PromptBasedLM):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
-    def default_task_prompt(self):
-        return "TL;DR:"
+    def default_user_prompt(self):
+        return "{input}\n\nTL;DR:"
 
 
 class InstructTunedSummarizer(PromptBasedLM):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
-    def default_task_prompt(self):
-        return "Write a summary of the article above in {budget} {budget_unit}."
+    def default_user_prompt(self):
+        return (
+            "{input}\n\nWrite a summary of the article above in {budget} {budget_unit}."
+        )

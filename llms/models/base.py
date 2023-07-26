@@ -109,28 +109,21 @@ class PromptBasedLM(BaseLM):
         self,
         model_name,
         system_prompt=None,
-        input_prompt=None,
-        task_prompt=None,
+        user_prompt=None,
         **kwargs,
     ) -> None:
         super().__init__(model_name, **kwargs)
-        if input_prompt is None:
-            input_prompt = self.default_input_prompt()
-        if task_prompt is None:
-            task_prompt = self.default_task_prompt()
+        if user_prompt is None:
+            user_prompt = self.default_user_prompt()
         if system_prompt is None:
             system_prompt = self.default_system_prompt()
-        self.input_prompt = input_prompt
-        self.task_prompt = task_prompt
+        self.user_prompt = user_prompt
         self.system_prompt = system_prompt
 
     def default_system_prompt(self):
         return None
 
-    def default_task_prompt(self):
-        return None
-
-    def default_input_prompt(self):
+    def default_user_prompt(self):
         return "{input}"
 
     def get_prompt_args(self):
@@ -178,17 +171,14 @@ class PromptBasedLM(BaseLM):
         self,
         input_data,
         system_prompt=None,
-        input_prompt=None,
-        task_prompt=None,
+        user_prompt=None,
         budget=6,
         budget_unit="sentences",
         verbose=False,
         **generation_kwargs,
     ):
-        if input_prompt is None:
-            input_prompt = self.input_prompt
-        if task_prompt is None:
-            task_prompt = self.task_prompt
+        if user_prompt is None:
+            user_prompt = self.user_prompt
         if system_prompt is None:
             system_prompt = self.system_prompt
 
@@ -214,17 +204,12 @@ class PromptBasedLM(BaseLM):
             system_prompt = system_prompt.format(**prompt_args)
             prompt.append({"role": "system", "content": system_prompt})
 
-        if input_prompt:
-            input_prompt = input_prompt.format(**prompt_args)
-            prompt.append({"role": "user", "content": input_prompt})
-
-        if task_prompt:
-            task_prompt = task_prompt.format(**prompt_args)
-            prompt.append({"role": "user", "content": task_prompt})
+        if user_prompt:
+            user_prompt = user_prompt.format(**prompt_args)
+            prompt.append({"role": "user", "content": user_prompt})
 
         log(logger, f"System prompt: {pformat(system_prompt)}", verbose=verbose)
-        log(logger, f"Input prompt: {pformat(input_prompt)}", verbose=verbose)
-        log(logger, f"Task prompt: {pformat(task_prompt)}", verbose=verbose)
+        log(logger, f"User prompt: {pformat(user_prompt)}", verbose=verbose)
         return prompt, generation_kwargs
 
     def num_tokens_for_prompt(self, messages):

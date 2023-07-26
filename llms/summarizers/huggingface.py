@@ -43,11 +43,8 @@ class InstructText2TextSummarizer(HFSummarizer, InstructText2TextLM):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
-    def default_input_prompt(self):
+    def default_user_prompt(self):
         return "summarize: {input}"
-
-    def default_task_prompt(self):
-        return None
 
 
 class InstructCausalLMSummarizer(InstructTunedSummarizer, CausalLMSummarizer):
