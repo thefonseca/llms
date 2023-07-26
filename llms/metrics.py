@@ -266,18 +266,21 @@ def generation_metrics(prediction, reference=None, source=None, parallelized=Fal
     if source is not None:
         metrics["source_stats"] = text_statistics(source)
 
-    metrics["prediction_stats"] = text_statistics(prediction)
+    metrics["prediction_stats"] = text_statistics(str(prediction))
 
     if reference is not None:
         if str(reference) == "nan":
             reference = "None"
-        metrics["reference_stats"] = text_statistics(reference)
 
-        metrics["length_diff"] = {}
-        for x in ["sentences", "tokens"]:
-            prediction_val = metrics["prediction_stats"][f"{x}_per_sample"]
-            reference_val = metrics["reference_stats"][f"{x}_per_sample"]
-            metrics["length_diff"][f"{x}_diff"] = abs(reference_val - prediction_val)
+        if isinstance(reference, str):
+            metrics["reference_stats"] = text_statistics(reference)
+            metrics["length_diff"] = {}
+            for x in ["sentences", "tokens"]:
+                prediction_val = metrics["prediction_stats"][f"{x}_per_sample"]
+                reference_val = metrics["reference_stats"][f"{x}_per_sample"]
+                metrics["length_diff"][f"{x}_diff"] = abs(
+                    reference_val - prediction_val
+                )
 
     return metrics
 

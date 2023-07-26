@@ -37,12 +37,21 @@ def classification_metrics(prediction, reference=None, source=None, parallelized
     if reference is not None:
         if str(reference) == "nan":
             reference = "None"
-        metrics["accuracy"] = prediction.lower() == reference.lower()
+
+        if isinstance(prediction, str) or isinstance(reference, str):
+            prediction = str(prediction)
+            reference = str(reference)
+            metrics["exact_match"] = prediction.lower() == reference.lower()
+            metrics["partial_match"] = (reference.lower() in prediction.lower()) or (
+                prediction.lower() in reference.lower()
+            )
+        else:
+            metrics["exact_match"] = prediction == reference
 
     return metrics
 
 
-def evaluate(model_name=None, **kwargs):
+def evaluate_classifier(model_name=None, **kwargs):
     model_class = get_model_class(
         model_name, model_map=MODEL_MAP, default_class=InstructCausalLMClassifier
     )
@@ -56,4 +65,4 @@ def evaluate(model_name=None, **kwargs):
 
 if __name__ == "__main__":
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    fire.Fire(evaluate)
+    fire.Fire(evaluate_classifier)

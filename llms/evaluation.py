@@ -283,7 +283,7 @@ def evaluate_model(
             )
 
         def is_valid_pred(pred):
-            return pred and str(pred) != "nan"
+            return pred is not None and str(pred) != "nan"
 
         valid_pred_idxs = [
             idx for idx, pred in enumerate(predictions) if is_valid_pred(pred)
