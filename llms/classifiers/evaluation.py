@@ -7,7 +7,9 @@ from ..evaluation import evaluate_model
 from ..inference import get_model_class
 from ..metrics import generation_metrics
 
+from .lmql import LMQLInstructCausalLMClassifier, LMQLVicunaClassifier
 from .models import (
+    CausalLMClassifier,
     InstructCausalLMClassifier,
     AlpacaClassifier,
     VicunaClassifier,
@@ -20,8 +22,11 @@ logger = logging.getLogger(__name__)
 
 
 MODEL_MAP = {
+    "lmql:.*vicuna.*": LMQLVicunaClassifier,
+    "lmql:.*": LMQLInstructCausalLMClassifier,
     "gpt-[-\d\w]*": OpenAIClassifier,
     ".*llama-?2.*chat.*": LlamaClassifier,
+    ".*llama-?2.*": CausalLMClassifier,
     ".*alpaca.*": AlpacaClassifier,
     ".*vicuna.*": VicunaClassifier,
     "mosaicml/mpt[-\d\w]+instruct": AlpacaClassifier,
@@ -55,12 +60,13 @@ def evaluate_classifier(model_name=None, **kwargs):
     model_class = get_model_class(
         model_name, model_map=MODEL_MAP, default_class=InstructCausalLMClassifier
     )
-    evaluate_model(
+    result = evaluate_model(
         model_name=model_name,
         model_class=model_class,
         metrics=classification_metrics,
         **kwargs,
     )
+    return result
 
 
 if __name__ == "__main__":

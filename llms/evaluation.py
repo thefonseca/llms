@@ -308,7 +308,7 @@ def evaluate_model(
         _kwargs = {}
         if "seed" in kwargs:
             _kwargs["seed"] = kwargs.get("seed")
-        evaluate(
+        scores = evaluate(
             predictions,
             sources,
             metrics,
@@ -317,6 +317,7 @@ def evaluate_model(
             parallelize=parallelize,
             **_kwargs,
         )
+        return sources, predictions, targets, scores
 
 
 if __name__ == "__main__":
