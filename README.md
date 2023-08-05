@@ -1,6 +1,6 @@
 # LLMs
 
-This is a tool to evaluate of large language models on diverse tasks. It implements a common API for traditional encoder-decoder and prompt-based large language models, as well as APIs such as OpenAI and Cohere.
+This is a tool to evaluate of large language models on NLP tasks. It implements a common API for traditional encoder-decoder and prompt-based large language models, as well as APIs such as OpenAI and Cohere.
 
 Currently, these functionalities are available:
 - Prompting and truncation logic
@@ -15,7 +15,21 @@ git clone https://github.com/thefonseca/llms.git
 cd llms && pip install -e .
 ```
 
-## Examples
+## Classification examples
+```
+python -m llms.classifiers.evaluation \
+--model_name llama-2-7b-chat 
+--model_checkpoint_path path_to_llama2_checkpoint 
+--model_dtype fp16 
+--dataset_name imdb 
+--split test 
+--source_key text 
+--target_key label 
+--model_labels "{'Positive':1,'Negative':0}" 
+--max_samples 1000
+```
+
+## Summarization examples
 Evaluating [BigBird](https://github.com/google-research/bigbird) on [PubMed](https://huggingface.co/datasets/scientific_papers) validation split, and saving the results on the `output` folder:
 
 ```bash
