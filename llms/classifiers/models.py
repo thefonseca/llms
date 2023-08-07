@@ -21,7 +21,8 @@ class InstructTunedClassifier(PromptBasedLM):
     def get_prompt_args(self):
         labels = self.labels
         if isinstance(labels, (list, tuple, dict)):
-            labels = ", ".join(labels)
+            # labels = ", ".join(labels)
+            labels = [f"- {label}\n" for label in labels]
         return dict(labels=labels)
 
     def default_user_prompt(self):
@@ -30,8 +31,32 @@ class InstructTunedClassifier(PromptBasedLM):
             "Be concise and only write the category name.\nCategory:"
         )
 
+    def fix_prediction(self, output):
+        if isinstance(self.labels, (list, tuple, dict)):
+            target_labels = [x.lower() for x in self.labels]
+        else:
+            target_labels = self.labels.lower()
+
+        if output == "":
+            logger.warning(f"Prediction is empty")
+
+        elif output.lower() not in target_labels:
+            for label in self.labels:
+                # some models output truncated labels
+                if output.lower() == label.lower()[: len(output)]:
+                    logger.warning(f"Fixing prediction: {output} => {label}")
+                    output = label
+                    break
+            else:
+                logger.warning(
+                    f'Prediction "{output}" is not in labels: {self.labels}.'
+                )
+
+        return output
+
     def postprocess(self, output):
         output = super().postprocess(output)
+        output = self.fix_prediction(output)
         # Labels can be specified as a map from a language label to a symbol.
         # E.g., {"Positive":1, "Negative": 0}
         if isinstance(self.labels, dict):
@@ -48,29 +73,6 @@ class HFClassifier(HFModel):
         if "do_sample" not in kwargs:
             kwargs["do_sample"] = False
         return kwargs
-
-    def postprocess(self, output):
-        output = super().postprocess(output)
-
-        if isinstance(self.labels, (list, tuple, dict)):
-            target_labels = [x.lower() for x in self.labels]
-        else:
-            target_labels = self.labels.lower()
-
-        if output.lower() not in target_labels:
-            # some models append "." at the end
-            if output[-1] == "." and output[:-1].lower() in target_labels:
-                output = output[:-1]
-            else:
-                logger.warning(
-                    f'Prediction "{output}" is not in labels: {self.labels}.'
-                )
-
-        # Labels can be specified as a map from a language label to a symbol.
-        # E.g., {"Positive":1, "Negative": 0}
-        if isinstance(self.labels, dict):
-            output = self.labels.get(output, output)
-        return output
 
 
 class CausalLMClassifier(HFClassifier, CausalLM):
