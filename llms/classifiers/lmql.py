@@ -3,7 +3,7 @@ import logging
 import lmql
 import torch
 
-from ..models.huggingface import HFModel, CausalLM, Vicuna
+from ..models.huggingface import HFModel, CausalLM, Vicuna, LlamaChat
 from .models import InstructTunedClassifier
 from ..utils.memoizer import memoize
 
@@ -40,11 +40,22 @@ class LMQLInstructClassifier(InstructTunedClassifier, HFModel):
         self.model = model
         return model
 
-    @lmql.query
-    def classify(prompt, labels, max_words):
-        """
-        "{prompt}[CATEGORY]" where STOPS_AT(CATEGORY, "\n") and len(WORDS(CATEGORY)) < max_words and not "." in CATEGORY
-        """
+    def default_user_prompt(self):
+        return (
+            "Text: {input}\n\nClassify the text above into one of the following categories:\n{labels}\n"
+            "Be concise and only write the category name."
+        )
+
+    def process_generation_kwargs(self, **generation_kwargs):
+        kwargs = super().process_generation_kwargs(**generation_kwargs)
+        if "lmql" not in kwargs:
+            kwargs["lmql"] = '"{query} Category: [CATEGORY]" where CATEGORY in labels'
+        return kwargs
+
+    def prompt_to_text(self, prompt):
+        prompt = super().prompt_to_text(prompt)
+        prompt = prompt.replace("\n", "\\n")
+        return prompt
 
     @memoize()
     def generate_cached(
@@ -58,10 +69,13 @@ class LMQLInstructClassifier(InstructTunedClassifier, HFModel):
     ):
         model_kwargs = self.get_model_kwargs()
         model = self.load_model(**model_kwargs)
-        result = LMQLInstructClassifier.classify(
-            model_input,
-            self.labels,
-            self.max_label_words,
+        lmql_str = generation_kwargs["lmql"]
+        model_input = model_input.replace('"', '\\"')
+        lmql_str = lmql_str.format(query=model_input)
+
+        result = lmql.run_sync(
+            lmql_str,
+            labels=self.labels,
             model=model,
             decoder=decoder,
             temperature=temperature,
@@ -80,3 +94,18 @@ class LMQLInstructCausalLMClassifier(LMQLInstructClassifier, CausalLM):
 class LMQLVicunaClassifier(Vicuna, LMQLInstructCausalLMClassifier):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
+
+
+class LMQLLlamaChatClassifier(LlamaChat, LMQLInstructCausalLMClassifier):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
+
+    def default_system_prompt(self):
+        return None
+
+    def prompt_to_text(self, prompt):
+        prompt = super().prompt_to_text(prompt)
+        prompt = prompt.replace("[INST]", "[[INST]]")
+        prompt = prompt.replace("[/INST]", "[[/INST]]")
+        prompt = prompt.replace("\n", "\\n")
+        return prompt

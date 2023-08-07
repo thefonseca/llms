@@ -7,7 +7,11 @@ from ..evaluation import evaluate_model
 from ..inference import get_model_class
 from ..metrics import generation_metrics
 
-from .lmql import LMQLInstructCausalLMClassifier, LMQLVicunaClassifier
+from .lmql import (
+    LMQLInstructCausalLMClassifier,
+    LMQLVicunaClassifier,
+    LMQLLlamaChatClassifier,
+)
 from .models import (
     CausalLMClassifier,
     InstructCausalLMClassifier,
@@ -23,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 MODEL_MAP = {
     "lmql:.*vicuna.*": LMQLVicunaClassifier,
+    "lmql:.*llama-?2.*": LMQLLlamaChatClassifier,
     "lmql:.*": LMQLInstructCausalLMClassifier,
     "gpt-[-\d\w]*": OpenAIClassifier,
     ".*llama-?2.*chat.*": LlamaClassifier,
@@ -57,9 +62,11 @@ def classification_metrics(prediction, reference=None, source=None, parallelized
 
 
 def evaluate_classifier(model_name=None, **kwargs):
-    model_class = get_model_class(
-        model_name, model_map=MODEL_MAP, default_class=InstructCausalLMClassifier
-    )
+    model_class = kwargs.pop("model_class")
+    if model_class is None:
+        model_class = get_model_class(
+            model_name, model_map=MODEL_MAP, default_class=InstructCausalLMClassifier
+        )
     result = evaluate_model(
         model_name=model_name,
         model_class=model_class,
