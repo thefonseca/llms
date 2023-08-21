@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 class BaseLM:
     def __init__(self, model_name) -> None:
         self.model_name = model_name
+        self.input_data = None
 
     def __repr__(self):
         attr_dict = self.__dict__.copy()
@@ -82,6 +83,7 @@ class BaseLM:
         verbose=False,
         **generation_kwargs,
     ):
+        self.input_data = input_data
         model_input, _, generation_kwargs = self.preprocess(
             input_data, truncation=truncation, verbose=verbose, **generation_kwargs
         )
