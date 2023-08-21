@@ -13,11 +13,11 @@ from .lmql import (
     LMQLLlamaChatClassifier,
 )
 from .models import (
-    CausalLMClassifier,
+    MLECausalLMClassifier,
     InstructCausalLMClassifier,
     AlpacaClassifier,
     VicunaClassifier,
-    LlamaClassifier,
+    LlamaChatClassifier,
     OpenAIClassifier,
 )
 
@@ -30,8 +30,8 @@ MODEL_MAP = {
     "lmql:.*llama-?2.*": LMQLLlamaChatClassifier,
     "lmql:.*": LMQLInstructCausalLMClassifier,
     "gpt-[-\d\w]*": OpenAIClassifier,
-    ".*llama-?2.*chat.*": LlamaClassifier,
-    ".*llama-?2.*": CausalLMClassifier,
+    ".*llama-?2.*chat.*": LlamaChatClassifier,
+    ".*llama-?2.*": MLECausalLMClassifier,
     ".*alpaca.*": AlpacaClassifier,
     ".*vicuna.*": VicunaClassifier,
     "mosaicml/mpt[-\d\w]+instruct": AlpacaClassifier,
