@@ -40,16 +40,12 @@ class HFModel(BaseLM):
             self.model_kwargs["dtype"] = self.infer_dtype(dtype)
 
     def infer_dtype(self, value):
-        if value == "fp16":
-            dtype = torch.float16
-        elif value == "fp32":
-            dtype = torch.float32
-        elif value == "fp64":
-            dtype = torch.float64
-        elif value == "bf16":
-            dtype = torch.bfloat16
+        if value is None or not isinstance(value, str):
+            dtype = value
         elif value == "auto":
             dtype = "auto"
+        elif hasattr(torch, value):
+            dtype = getattr(torch, value)
         else:
             logger.warning(f"Unsupported dtype {value}. Setting dtype = 'auto'.")
             dtype = "auto"
@@ -464,10 +460,10 @@ class LlamaChat(InstructCausalLM):
         if system_prompt:
             system_prompt = system_prompt[0]["content"]
             prompt_text = (
-                f"<s>{B_INST} {B_SYS}{system_prompt}{E_SYS}{user_message} {E_INST}"
+                f"{B_INST} {B_SYS}{system_prompt}{E_SYS}{user_message} {E_INST}"
             )
         else:
-            prompt_text = f"<s>{B_INST} {user_message} {E_INST}"
+            prompt_text = f"{B_INST} {user_message} {E_INST}"
         return prompt_text
 
     def process_generation_kwargs(self, **generation_kwargs):
