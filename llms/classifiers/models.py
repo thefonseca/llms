@@ -24,6 +24,12 @@ class BaseClassifier(BaseLM):
         super().__init__(model_name, **kwargs)
         self.labels = labels
 
+    def process_generation_kwargs(self, **generation_kwargs):
+        kwargs = super().process_generation_kwargs(**generation_kwargs)
+        if "labels" not in kwargs:
+            kwargs["labels"] = self.labels
+        return kwargs
+
     def postprocess(self, output):
         output = super().postprocess(output)
         # Labels can be specified as a map from a language label to a symbol.
@@ -154,12 +160,11 @@ class MLECausalLMClassifier(HFClassifier, InstructCausalLM):
 
     @memoize(ignore_kwargs=["model_path"])
     def generate_cached(
-        self, model_name, model_input, memoizer_ignore_cache=False, **kwargs
+        self, model_name, model_input, labels, memoizer_ignore_cache=False, **kwargs
     ):
         model_kwargs = self.get_model_kwargs()
         model = self.load_model(**model_kwargs)
         tokenizer = self.load_tokenizer()
-        labels = self.labels
         return self.get_scores_for_labels(model_input, labels, model, tokenizer)
 
 
