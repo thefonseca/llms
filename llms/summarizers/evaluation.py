@@ -44,10 +44,13 @@ def evaluate_summarizer(model_name=None, **kwargs):
     model_class = get_model_class(
         model_name, model_map=MODEL_MAP, default_class=Text2TextSummarizer
     )
+    metrics = kwargs.pop("metrics", [])
+    metrics.append(summarization_metrics)
+
     evaluate_model(
         model_name=model_name,
         model_class=model_class,
-        metrics=summarization_metrics,
+        metrics=metrics,
         **kwargs,
     )
 

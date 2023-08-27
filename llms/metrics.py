@@ -156,6 +156,12 @@ def get_confidence_interval(scores):
 
 
 def aggregate_metrics(metrics):
+
+    def _add_scores(results_dict, key, scores):
+        key_results = results_dict.get(key, [])
+        key_results.append(scores)
+        results_dict[key] = key_results
+
     def _scores_dict_to_list(scores, results_dict=None, key="root"):
         """Recursively aggregate a list of dicts into a dict of list of scores"""
 
@@ -167,13 +173,15 @@ def aggregate_metrics(metrics):
                 key_results = results_dict.get(key, {})
                 results_dict[key] = key_results
                 _scores_dict_to_list(score, key_results, key=key_)
+        elif isinstance(scores, list) and isinstance(scores[0], list):
+            # This case cover metrics that are vectors
+            for score in scores:
+                 _add_scores(results_dict, key, score)
         elif isinstance(scores, list):
             for score in scores:
                 _scores_dict_to_list(score, results_dict, key=key)
         else:
-            key_results = results_dict.get(key, [])
-            key_results.append(scores)
-            results_dict[key] = key_results
+            _add_scores(results_dict, key, scores)
         return results_dict.get("root")
 
     def _aggregate_scores(scores, results_dict=None, key="root"):
@@ -341,7 +349,7 @@ def compute_metrics(
         metrics = [metrics]
 
     for metric in metrics:
-        if not isinstance(metric, dict):
+        if callable(metric):
             metric = {"metric_fn": metric, "metric_name": metric.__name__}
 
         metric_name = metric.get("metric_name")
@@ -359,4 +367,5 @@ def compute_metrics(
         )
 
         scores[metric_name] = metric_scores
-        return scores
+    
+    return scores

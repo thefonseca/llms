@@ -17,12 +17,7 @@ from .metrics import (
     save_scores,
     generation_metrics,
 )
-from .utils.utils import (
-    config_logging,
-    get_output_path,
-    get_progress_bar,
-    add_progress_task,
-)
+from .utils.utils import config_logging, get_output_path
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +44,7 @@ def _aggregate_scores(p_scores, scores):
             if key in all_scores:
                 logger.warning(f"Values for metric {key} already exist.")
             all_scores[key] = scores[key]
+
     agg_scores = aggregate_metrics(all_scores)
     return all_scores, agg_scores
 
