@@ -40,10 +40,19 @@ MODEL_MAP = {
 }
 
 
-def evaluate_summarizer(model_name=None, **kwargs):
+def get_summarizer_model_class(
+    model_name, model_map=MODEL_MAP, default_class=Text2TextSummarizer
+):
     model_class = get_model_class(
-        model_name, model_map=MODEL_MAP, default_class=Text2TextSummarizer
+        model_name, model_map=model_map, default_class=default_class
     )
+    return model_class
+
+
+def evaluate_summarizer(model_name=None, **kwargs):
+    model_class = kwargs.pop("model_class")
+    if model_class is None:
+        model_class = get_summarizer_model_class(model_name)
     metrics = kwargs.pop("metrics", [])
     metrics.append(summarization_metrics)
 
