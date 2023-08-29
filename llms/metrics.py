@@ -20,29 +20,38 @@ from .utils.utils import (
 logger = logging.getLogger(__name__)
 
 
-def scores_to_df(scores):
-    scores_df = {}
+def scores_to_df(scores, key=None, scores_df=None):
+    if scores_df is None:
+        scores_df = {}
 
-    for score_key, _scores in scores.items():
-        if score_key == "rouge":
-            for rouge_scores in _scores:
-                for rouge_key, score in rouge_scores.items():
-                    for sub_key in ["precision", "recall", "fmeasure"]:
-                        values = scores_df.get(f"{rouge_key}_{sub_key}", [])
-                        value = getattr(score, sub_key)
-                        values.append(value)
-                        scores_df[f"{rouge_key}_{sub_key}"] = values
+    if isinstance(scores, dict):
+        if key and "rouge" in key:
+            for rouge_key, score in scores.items():
+                for sub_key in ["precision", "recall", "fmeasure"]:
+                    _key = f"{key}_{rouge_key}_{sub_key}"
+                    values = scores_df.get(_key, [])
+                    value = getattr(score, sub_key)
+                    values.append(value)
+                    scores_df[_key] = values
 
         else:
-            for sample_scores in _scores:
-                for sub_key in sample_scores:
-                    values = scores_df.get(f"{score_key}_{sub_key}", [])
-                    if isinstance(sample_scores[sub_key], list):
-                        value = sample_scores[sub_key][0]
-                    else:
-                        value = sample_scores[sub_key]
-                    values.append(value)
-                    scores_df[f"{score_key}_{sub_key}"] = values
+            for sub_key, score in scores.items():
+                if key:
+                    sub_key = f"{key}_{sub_key}"
+                scores_to_df(score, key=sub_key, scores_df=scores_df)
+
+    elif isinstance(scores, list) and isinstance(scores[0], dict):
+        for score in scores:
+            scores_to_df(score, key=key, scores_df=scores_df)
+
+    else:
+        values = scores_df.get(key, [])
+        if isinstance(scores, list):
+            value = scores[0]
+        else:
+            value = scores
+        values.append(value)
+        scores_df[key] = values
 
     return scores_df
 
