@@ -51,7 +51,7 @@ def get_summarizer_model_class(
 
 def evaluate_summarizer(model_name=None, **kwargs):
     model_class = kwargs.pop("model_class")
-    if model_class is None:
+    if model_name and model_class is None:
         model_class = get_summarizer_model_class(model_name)
     metrics = kwargs.pop("metrics", [])
     metrics.append(summarization_metrics)
