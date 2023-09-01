@@ -442,6 +442,11 @@ class LlamaChat(InstructCausalLM):
 
     def default_max_tokens(self):
         return 4096
+    
+    def load_tokenizer(self):
+        tokenizer = super().load_tokenizer()
+        tokenizer.pad_token = tokenizer.eos_token
+        return tokenizer
 
     def default_system_prompt(self):
         return "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. "
