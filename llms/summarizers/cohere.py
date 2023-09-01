@@ -52,9 +52,6 @@ class CohereSummarizer(InstructTunedSummarizer):
     def default_max_tokens(self):
         return 2048
 
-    def default_user_prompt(self):
-        return "{input}"
-
     def preprocess(self, text, truncation=True, **generation_kwargs):
         model_input, truncated_tokens, generation_kwargs = super().preprocess(
             text, truncation=truncation, **generation_kwargs

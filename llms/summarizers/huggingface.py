@@ -43,7 +43,7 @@ class InstructText2TextSummarizer(HFSummarizer, InstructText2TextLM):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
-    def default_user_prompt(self):
+    def default_input_prompt(self):
         return "summarize: {input}"
 
 
@@ -52,16 +52,16 @@ class InstructCausalLMSummarizer(InstructTunedSummarizer, CausalLMSummarizer):
         super().__init__(model_name, **kwargs)
 
 
-class AlpacaSummarizer(Alpaca, InstructCausalLMSummarizer):
+class AlpacaSummarizer(InstructCausalLMSummarizer, Alpaca):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
 
-class VicunaSummarizer(Vicuna, InstructCausalLMSummarizer):
+class VicunaSummarizer(InstructCausalLMSummarizer, Vicuna):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
 
-class LlamaSummarizer(LlamaChat, InstructCausalLMSummarizer):
+class LlamaSummarizer(InstructCausalLMSummarizer, LlamaChat):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)

@@ -112,6 +112,7 @@ class PromptBasedLM(BaseLM):
         model_name,
         system_prompt=None,
         user_prompt=None,
+        input_prompt=None,
         **kwargs,
     ) -> None:
         super().__init__(model_name, **kwargs)
@@ -119,15 +120,21 @@ class PromptBasedLM(BaseLM):
             user_prompt = self.default_user_prompt()
         if system_prompt is None:
             system_prompt = self.default_system_prompt()
+        if input_prompt is None:
+            input_prompt = self.default_input_prompt()
         self.user_prompt = user_prompt
         self.system_prompt = system_prompt
+        self.input_prompt = input_prompt
 
     def default_system_prompt(self):
         return None
 
-    def default_user_prompt(self):
+    def default_input_prompt(self):
         return "{input}"
-
+    
+    def default_user_prompt(self):
+        return None
+    
     def get_prompt_args(self):
         return {}
 
@@ -149,22 +156,26 @@ class PromptBasedLM(BaseLM):
         # discount maximum output length from max_tokens
         num_tokens = self.num_tokens_for_prompt(prompt)
         excess_tokens = num_tokens - max_tokens
-        # choose the longest message for truncation
-        message_lengths = [len(m["content"]) for m in prompt]
-        longest_idx = np.argmax(message_lengths)
+        
+        # find input data prompt (the one to be truncated)
+        input_idx = -1
+        for idx, item in enumerate(prompt):
+            if item["role"] == "input":
+                input_idx = idx
+                break
 
         if excess_tokens > 0:
             tokenizer = self.load_tokenizer()
             truncated_prompt = [dict(item) for item in prompt]
-            text = prompt[longest_idx]["content"]
+            text = prompt[input_idx]["content"]
             tokens = tokenizer.encode(text)
             tokens = tokens[:-excess_tokens]
             try:
-                truncated_prompt[longest_idx]["content"] = tokenizer.decode(
+                truncated_prompt[input_idx]["content"] = tokenizer.decode(
                     tokens, skip_special_tokens=True, clean_up_tokenization_spaces=None
                 )
             except TypeError:
-                truncated_prompt[longest_idx]["content"] = tokenizer.decode(tokens)
+                truncated_prompt[input_idx]["content"] = tokenizer.decode(tokens)
 
             prompt = truncated_prompt
         return prompt, excess_tokens
@@ -174,6 +185,7 @@ class PromptBasedLM(BaseLM):
         input_data,
         system_prompt=None,
         user_prompt=None,
+        input_prompt=None,
         budget=6,
         budget_unit="sentences",
         verbose=False,
@@ -183,6 +195,8 @@ class PromptBasedLM(BaseLM):
             user_prompt = self.user_prompt
         if system_prompt is None:
             system_prompt = self.system_prompt
+        if input_prompt is None:
+            input_prompt = self.input_prompt
 
         # a naive way of converting unit to singular...
         if budget == 1 and budget_unit[-1].lower() == "s":
@@ -206,11 +220,16 @@ class PromptBasedLM(BaseLM):
             system_prompt = system_prompt.format(**prompt_args)
             prompt.append({"role": "system", "content": system_prompt})
 
+        if input_prompt:
+            input_prompt = input_prompt.format(**prompt_args)
+            prompt.append({"role": "input", "content": input_prompt})
+
         if user_prompt:
             user_prompt = user_prompt.format(**prompt_args)
             prompt.append({"role": "user", "content": user_prompt})
 
         log(logger, f"System prompt: {pformat(system_prompt)}", verbose=verbose)
+        log(logger, f"Input prompt: {pformat(input_prompt)}", verbose=verbose)
         log(logger, f"User prompt: {pformat(user_prompt)}", verbose=verbose)
         return prompt, generation_kwargs
 

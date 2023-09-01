@@ -64,6 +64,9 @@ class OpenAIChat(PromptBasedLM):
         prompt, truncated_tokens, generation_kwargs = super().preprocess(
             text, truncation=truncation, max_length=max_length, **generation_kwargs
         )
+        for item in prompt:
+            if item["role"] not in ["system", "user"]:
+                item["role"] = "user"
         generation_kwargs["max_tokens"] = max_length
         generation_kwargs.pop("seed", None)
         return prompt, truncated_tokens, generation_kwargs
