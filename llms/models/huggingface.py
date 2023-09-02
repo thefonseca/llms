@@ -412,7 +412,7 @@ class Alpaca(InstructCausalLM):
 
     def prompt_to_text(self, prompt):
         system_prompt = [m for m in prompt if m["role"] == "system"]
-        user_message = [m for m in prompt if m["role"] == "user"]
+        user_message = [m for m in prompt if m["role"] in ["input", "user"]]
         prompt_text = "\n".join([m["content"] for m in user_message])
 
         if system_prompt:
@@ -459,7 +459,7 @@ class LlamaChat(InstructCausalLM):
         B_INST, E_INST = "[INST]", "[/INST]"
         B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
         system_prompt = [m for m in prompt if m["role"] == "system"]
-        user_message = [m for m in prompt if m["role"] == "user"]
+        user_message = [m for m in prompt if m["role"] in ["input", "user"]]
         user_message = "\n".join([m["content"] for m in user_message])
 
         if system_prompt:

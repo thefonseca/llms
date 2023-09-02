@@ -48,8 +48,8 @@ class BaseClassifier(BaseLM):
     
 
 class HFClassifier(BaseClassifier, HFModel):
-    def __init__(self, model_name, **kwargs) -> None:
-        super().__init__(model_name, **kwargs)
+    def __init__(self, model_name, labels, **kwargs) -> None:
+        super().__init__(model_name, labels, **kwargs)
 
     def process_generation_kwargs(self, **generation_kwargs):
         kwargs = super().process_generation_kwargs(**generation_kwargs)
@@ -115,8 +115,8 @@ class InstructTunedClassifier(BaseClassifier):
 
 
 class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
-    def __init__(self, model_name, **kwargs) -> None:
-        super().__init__(model_name, **kwargs)
+    def __init__(self, model_name, labels, **kwargs) -> None:
+        super().__init__(model_name, labels, **kwargs)
     
     def default_input_prompt(self):
         return "Text: {input}"
