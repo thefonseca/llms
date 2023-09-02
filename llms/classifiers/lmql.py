@@ -10,6 +10,12 @@ from ..utils.memoizer import memoize
 logger = logging.getLogger(__name__)
 
 
+LMQL_TEMPLATE = """{decoder} 
+"{query}\\nCategory: [CATEGORY]"
+where 
+    CATEGORY in labels"""
+
+
 class LMQLInstructClassifier(InstructTunedClassifier, HFModel):
     def __init__(self, model_name, labels, **kwargs) -> None:
         self.lmql_model_name = model_name.replace("lmql:", "")
@@ -24,9 +30,7 @@ class LMQLInstructClassifier(InstructTunedClassifier, HFModel):
         if "local:" in self.lmql_model_name or "local:" in self.lmql_model_path:
             torch.multiprocessing.set_start_method("spawn")
         super().__init__(model_name, labels, **kwargs)
-        label_words = [len(l.split(" ")) for l in labels]
-        self.max_label_words = max(label_words) + 1
-
+        
     def load_model(self, **kwargs):
         if self.model:
             return self.model
@@ -40,16 +44,19 @@ class LMQLInstructClassifier(InstructTunedClassifier, HFModel):
         self.model = model
         return model
 
-    def default_user_prompt(self):
+    def default_input_prompt(self):
         return (
-            "Text: {input}\n\nClassify the text above into one of the following categories:\n{labels}\n"
-            "Be concise and only write the category name."
+            "Classify the text below into one of the following categories:\n{labels}\n"
+            "\nText: {input}"
         )
+    
+    def default_user_prompt(self):
+        return None
 
     def process_generation_kwargs(self, **generation_kwargs):
         kwargs = super().process_generation_kwargs(**generation_kwargs)
         if "lmql" not in kwargs:
-            kwargs["lmql"] = '"{query} Category: [CATEGORY]" where CATEGORY in labels'
+            kwargs["lmql"] = LMQL_TEMPLATE
         return kwargs
 
     def prompt_to_text(self, prompt):
@@ -62,6 +69,7 @@ class LMQLInstructClassifier(InstructTunedClassifier, HFModel):
         self,
         model_name,
         model_input,
+        labels,
         decoder="argmax",
         n_samples=1,
         temperature=0,
@@ -71,13 +79,11 @@ class LMQLInstructClassifier(InstructTunedClassifier, HFModel):
         model = self.load_model(**model_kwargs)
         lmql_str = generation_kwargs["lmql"]
         model_input = model_input.replace('"', '\\"')
-        lmql_str = lmql_str.format(query=model_input)
-
+        lmql_str = lmql_str.format(query=model_input, decoder=decoder)
         result = lmql.run_sync(
             lmql_str,
-            labels=self.labels,
+            labels=labels,
             model=model,
-            decoder=decoder,
             temperature=temperature,
             n=n_samples,
             **generation_kwargs,
@@ -91,12 +97,12 @@ class LMQLInstructCausalLMClassifier(LMQLInstructClassifier, CausalLM):
         super().__init__(model_name, **kwargs)
 
 
-class LMQLVicunaClassifier(Vicuna, LMQLInstructCausalLMClassifier):
+class LMQLVicunaClassifier(LMQLInstructClassifier, Vicuna):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
 
-class LMQLLlamaChatClassifier(LlamaChat, LMQLInstructCausalLMClassifier):
+class LMQLLlamaChatClassifier(LMQLInstructClassifier, LlamaChat):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
