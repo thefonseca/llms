@@ -127,7 +127,10 @@ class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
     def get_scores_for_labels(self, model_input, labels, model, tokenizer):
         model_input = model_input.strip() + " "
         # random.shuffle(labels)
-        _labels = labels
+        if isinstance(labels, dict):
+           _labels = sorted(list(labels.keys()))
+        else:
+            _labels = labels
         inputs = [f"{model_input}{l}" for l in _labels]
 
         # Get encodings
@@ -173,7 +176,7 @@ class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
         labels_scores = labels_scores.exp().detach().numpy()
         probs = labels_scores / labels_scores.sum()
         dist = [(label,prob) for label, prob in zip(_labels, probs)]
-        label = labels[np.argmax(labels_scores)]
+        label = _labels[np.argmax(labels_scores)]
         output = dict(text=self.input_data, distribution=dist, label=label)
         return output
 
