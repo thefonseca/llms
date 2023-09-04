@@ -64,7 +64,7 @@ def classification_metrics(prediction, reference=None, source=None, parallelized
 
 
 def evaluate_classifier(model_name=None, **kwargs):
-    model_class = kwargs.pop("model_class")
+    model_class = kwargs.pop("model_class", None)
     if model_class is None:
         model_class = get_model_class(
             model_name, model_map=MODEL_MAP, default_class=InstructCausalLMClassifier
