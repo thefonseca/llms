@@ -1,4 +1,5 @@
 import logging
+from pprint import pformat
 import random
 import re
 
@@ -21,7 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 class BaseClassifier(BaseLM):
-    def __init__(self, model_name, labels, input_type="text", label_type="category", **kwargs) -> None:
+    def __init__(
+        self, model_name, labels, input_type="text", label_type="category", **kwargs
+    ) -> None:
         super().__init__(model_name, **kwargs)
         self.labels = labels
         self.label_type = label_type
@@ -49,7 +52,7 @@ class BaseClassifier(BaseLM):
         if isinstance(self.labels, dict):
             output = self.labels.get(output, output)
         return output
-    
+
 
 class HFClassifier(BaseClassifier, HFModel):
     def __init__(self, model_name, labels, **kwargs) -> None:
@@ -77,7 +80,7 @@ class InstructTunedClassifier(BaseClassifier):
 
     def default_input_prompt(self):
         return "{input_type}: {input}"
-            
+
     def default_user_prompt(self):
         return (
             "\nClassify the text above into one of the following categories:\n{labels}\n"
@@ -119,32 +122,68 @@ class InstructTunedClassifier(BaseClassifier):
 
 
 class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
-    def __init__(self, model_name, labels, **kwargs) -> None:
+    def __init__(self, model_name, labels, prior_normalization=False, **kwargs) -> None:
         super().__init__(model_name, labels, **kwargs)
-    
+        self.prior_normalization = prior_normalization
+        self.prior_label_probs = {}
+
     def default_input_prompt(self):
         return "{input_type}: {input}"
-    
+
     def default_user_prompt(self):
         return "{label_type}:"
 
-    def get_scores_for_labels(self, model_input, labels, model, tokenizer):
+    def process_generation_kwargs(self, **generation_kwargs):
+        kwargs = super().process_generation_kwargs(**generation_kwargs)
+        if "prior_normalization" not in kwargs:
+            kwargs["prior_normalization"] = self.prior_normalization
+        return kwargs
+
+    def _get_label_probs(self, encoded_input, label_log_probs):
+        # input_log_probs = input_log_probs.view(len(labels), -1)
+        input_len = encoded_input.input_ids.shape[1]
+        start_idx = max(0, input_len - 2)
+        labels_scores = label_log_probs[:, start_idx:]
+        labels_scores = labels_scores.sum(dim=-1)
+        # mask = labels_scores != 0
+        # labels_scores = (labels_scores * mask).sum(dim=-1) / mask.sum(dim=-1)
+
+        # Note: Label log probabilities are positive (due to the internals of pytorch's
+        # cross entropy). To obtain the "logits", we need to multiply by -1.
+        labels_scores = labels_scores * -1
+        labels_scores = labels_scores.exp()
+        label_probs = labels_scores / labels_scores.sum()
+        return label_probs.detach().numpy()
+
+    def get_scores_for_labels(
+        self, model_input, labels, model, tokenizer, prior_normalization
+    ):
         model_input = model_input.strip() + " "
-        # random.shuffle(labels)
         if isinstance(labels, dict):
-           _labels = sorted(list(labels.keys()))
+            _labels = sorted(list(labels.keys()))
         else:
             _labels = labels
-        inputs = [f"{model_input}{l}" for l in _labels]
+
+        model_inputs = [model_input]
+        prior_label_probs = None
+        if prior_normalization:
+            prior_label_probs = [
+                self.prior_label_probs[l] for l in labels if l in self.prior_label_probs
+            ]
+            if len(prior_label_probs) < len(_labels):
+                prior_label_probs = None
+                model_inputs.append(f"{self.label_type}: ")
+
+        inputs_and_labels = [f"{x}{l}" for x in model_inputs for l in _labels]
 
         # Get encodings
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.padding_side = "right"
-        input_enc = tokenizer([model_input], return_tensors="pt")
-        inputs_enc = tokenizer(inputs, return_tensors="pt", padding="longest")
-
-        # print(223, [tokenizer.convert_ids_to_tokens(ids) for ids in inputs_enc.input_ids])
-        target_enc = inputs_enc.input_ids.clone()
+        inputs_enc = [tokenizer(x, return_tensors="pt") for x in model_inputs]
+        inputs_and_labels_enc = tokenizer(
+            inputs_and_labels, return_tensors="pt", padding="longest"
+        )
+        target_enc = inputs_and_labels_enc.input_ids.clone()
         target_enc = (
             target_enc
             - (100 + tokenizer.pad_token_id)
@@ -152,10 +191,10 @@ class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
         )
 
         with torch.no_grad():
-            inputs_enc = inputs_enc.to(model.device)
+            inputs_and_labels_enc = inputs_and_labels_enc.to(model.device)
             model_output = model(
-                attention_mask=inputs_enc.attention_mask,
-                input_ids=inputs_enc.input_ids,
+                attention_mask=inputs_and_labels_enc.attention_mask,
+                input_ids=inputs_and_labels_enc.input_ids,
                 return_dict=True,
             )
 
@@ -166,32 +205,39 @@ class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
 
         # Compute the log probabilities associated with each of the labels
         logits = logits.type(torch.float32).to(target_enc.device)
-        labels_log_probs = F.cross_entropy(logits, target_enc, reduction="none")
+        log_probs = F.cross_entropy(logits, target_enc, reduction="none")
+        log_probs = log_probs.view(len(model_inputs), len(labels), -1)
+        label_probs = self._get_label_probs(inputs_enc[0], log_probs[0])
+        
+        if prior_normalization:
+            if prior_label_probs is None:
+                prior_label_probs = self._get_label_probs(inputs_enc[1], log_probs[1])
+                for idx, label in enumerate(_labels):
+                    self.prior_label_probs[label] = prior_label_probs[idx]
+                logger.info(f"Prior label probabilities:\n{pformat(self.prior_label_probs)}")
+            label_probs /= prior_label_probs
 
-        # Sum log probs for each of the (input, label) pair
-        labels_scores = labels_log_probs.view(len(labels), -1)
-        input_len = input_enc.input_ids.shape[1]
-
-        labels_scores = labels_scores[:, input_len - 2 :]
-        labels_scores = labels_scores.sum(dim=-1)
-        # Note: Label log probabilities are positive (due to the internals of pytorch's
-        # cross entropy). To obtain the "logits", we need to multiply by -1.
-        labels_scores = labels_scores * -1
-        labels_scores = labels_scores.exp().detach().numpy()
-        probs = labels_scores / labels_scores.sum()
-        dist = [(label,prob) for label, prob in zip(_labels, probs)]
-        label = _labels[np.argmax(labels_scores)]
+        dist = [(label, prob) for label, prob in zip(_labels, label_probs)]
+        label = _labels[np.argmax(label_probs)]
         output = dict(text=self.input_data, distribution=dist, label=label)
         return output
 
     @memoize(ignore_kwargs=["model_path"])
     def generate_cached(
-        self, model_name, model_input, labels, memoizer_ignore_cache=False, **kwargs
+        self,
+        model_name,
+        model_input,
+        labels,
+        prior_normalization,
+        memoizer_ignore_cache=False,
+        **kwargs,
     ):
         model_kwargs = self.get_model_kwargs()
         model = self.load_model(**model_kwargs)
         tokenizer = self.load_tokenizer()
-        return self.get_scores_for_labels(model_input, labels, model, tokenizer)
+        return self.get_scores_for_labels(
+            model_input, labels, model, tokenizer, prior_normalization
+        )
 
     def postprocess(self, output):
         if isinstance(output, dict) and "label" in output:
@@ -211,7 +257,7 @@ class DynamicContextClassifier(BaseClassifier):
     ) -> None:
         super().__init__(model_name, labels, **kwargs)
         if confidence_threshold is None:
-            confidence_threshold = min(2 * (1. / len(labels)), .7)
+            confidence_threshold = min(2 * (1.0 / len(labels)), 0.7)
         self.confidence_threshold = confidence_threshold
         self.memory_per_class = memory_per_class
         self.memory = []
@@ -230,7 +276,7 @@ class DynamicContextClassifier(BaseClassifier):
     def recall_samples(self):
         confident_samples = []
         sample_counts = {}
-        
+
         for sample in self.memory:
             category = sample["label"]
             add_to_memory = True
@@ -245,7 +291,7 @@ class DynamicContextClassifier(BaseClassifier):
                 class_count = sample_counts.get(category, 0)
                 # make sure samples remain reasonably uniform across labels
                 max_samples = min([sample_counts.get(l, 0) for l in self.labels])
-                max_samples = min(max_samples+1, self.memory_per_class)
+                max_samples = min(max_samples + 1, self.memory_per_class)
 
                 if class_count < max_samples:
                     confident_samples.append(sample)
@@ -262,7 +308,8 @@ class DynamicContextClassifier(BaseClassifier):
             logger.debug(f"Using {len(samples)} samples from memory")
 
             prompt = [
-                f"{{input_type}}: {s['text']}\{{label_type}}: {s['label']}" for s in samples
+                f"{{input_type}}: {s['text']}\{{label_type}}: {s['label']}"
+                for s in samples
             ]
             prompt = "\n\n".join(prompt)
             prompt += "\n\n"
@@ -279,7 +326,9 @@ class DynamicContextClassifier(BaseClassifier):
         return output
 
 
-class DynamicContextDirectClassifier(DynamicContextClassifier, DirectCausalLMClassifier):
+class DynamicContextDirectClassifier(
+    DynamicContextClassifier, DirectCausalLMClassifier
+):
     def __init__(self, model_name, labels, **kwargs) -> None:
         super().__init__(model_name, labels, **kwargs)
 
