@@ -14,7 +14,6 @@ from .lmql import (
 )
 from .models import (
     DirectCausalLMClassifier,
-    InContextDirectClassifier,
     InstructCausalLMClassifier,
     AlpacaClassifier,
     VicunaClassifier,
@@ -30,7 +29,6 @@ MODEL_MAP = {
     "lmql:.*vicuna.*": LMQLVicunaClassifier,
     "lmql:.*llama-?2.*": LMQLLlamaChatClassifier,
     "lmql:.*": LMQLInstructCausalLMClassifier,
-    "incontext.*": InContextDirectClassifier,
     "gpt-[-\d\w]*": OpenAIClassifier,
     ".*llama-?2.*chat.*": LlamaChatClassifier,
     "llama-?2.*": DirectCausalLMClassifier,

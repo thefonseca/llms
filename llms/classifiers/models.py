@@ -21,14 +21,16 @@ logger = logging.getLogger(__name__)
 
 
 class BaseClassifier(BaseLM):
-    def __init__(self, model_name, labels, label_type="category", **kwargs) -> None:
+    def __init__(self, model_name, labels, input_type="text", label_type="category", **kwargs) -> None:
         super().__init__(model_name, **kwargs)
         self.labels = labels
         self.label_type = label_type
+        self.input_type = input_type
 
     def get_prompt_args(self):
         label_type = self.label_type.capitalize()
-        return dict(label_type=label_type)
+        input_type = self.input_type.capitalize()
+        return dict(label_type=label_type, input_type=input_type)
 
     def process_generation_kwargs(self, **generation_kwargs):
         kwargs = super().process_generation_kwargs(**generation_kwargs)
@@ -36,11 +38,13 @@ class BaseClassifier(BaseLM):
             kwargs["labels"] = self.labels
         if "label_type" not in kwargs:
             kwargs["label_type"] = self.label_type
+        if "input_type" not in kwargs:
+            kwargs["input_type"] = self.input_type
         return kwargs
 
     def postprocess(self, output):
         output = super().postprocess(output)
-        # Labels can be specified as a map from a language label to a symbol.
+        # Labels can be specified as a map from a natural language label to a symbol.
         # E.g., {"Positive":1, "Negative": 0}
         if isinstance(self.labels, dict):
             output = self.labels.get(output, output)
@@ -72,7 +76,7 @@ class InstructTunedClassifier(BaseClassifier):
         return args
 
     def default_input_prompt(self):
-        return "Text: {input}"
+        return "{input_type}: {input}"
             
     def default_user_prompt(self):
         return (
@@ -119,7 +123,7 @@ class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
         super().__init__(model_name, labels, **kwargs)
     
     def default_input_prompt(self):
-        return "Text: {input}"
+        return "{input_type}: {input}"
     
     def default_user_prompt(self):
         return "{label_type}:"
@@ -196,7 +200,7 @@ class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
         return output
 
 
-class InContextClassifier(BaseClassifier):
+class DynamicContextClassifier(BaseClassifier):
     def __init__(
         self,
         model_name,
@@ -218,7 +222,7 @@ class InContextClassifier(BaseClassifier):
         return args
 
     def default_input_prompt(self):
-        return "{context}Text: {input}"
+        return "{context}{input_type}: {input}"
 
     def default_user_prompt(self):
         return "{label_type}:"
@@ -258,7 +262,7 @@ class InContextClassifier(BaseClassifier):
             logger.debug(f"Using {len(samples)} samples from memory")
 
             prompt = [
-                f"Text: {s['text']}\nCategory: {s['label']}" for s in samples
+                f"{{input_type}}: {s['text']}\{{label_type}}: {s['label']}" for s in samples
             ]
             prompt = "\n\n".join(prompt)
             prompt += "\n\n"
@@ -275,7 +279,7 @@ class InContextClassifier(BaseClassifier):
         return output
 
 
-class InContextDirectClassifier(InContextClassifier, DirectCausalLMClassifier):
+class DynamicContextDirectClassifier(DynamicContextClassifier, DirectCausalLMClassifier):
     def __init__(self, model_name, labels, **kwargs) -> None:
         super().__init__(model_name, labels, **kwargs)
 
