@@ -111,6 +111,7 @@ class PromptBasedLM(BaseLM):
         self,
         model_name,
         system_prompt=None,
+        context_prompt=None,
         user_prompt=None,
         input_prompt=None,
         **kwargs,
@@ -120,13 +121,24 @@ class PromptBasedLM(BaseLM):
             user_prompt = self.default_user_prompt()
         if system_prompt is None:
             system_prompt = self.default_system_prompt()
+        if context_prompt is None:
+            context_prompt = self.default_context_prompt()
         if input_prompt is None:
             input_prompt = self.default_input_prompt()
         self.user_prompt = user_prompt
         self.system_prompt = system_prompt
+        self.context_prompt = context_prompt
         self.input_prompt = input_prompt
+        # keep track of last prompt states
+        self._user_prompt = None
+        self._system_prompt = None
+        self._context_prompt = None
+        self._input_prompt = None
 
     def default_system_prompt(self):
+        return None
+    
+    def default_context_prompt(self):
         return None
 
     def default_input_prompt(self):
@@ -184,19 +196,22 @@ class PromptBasedLM(BaseLM):
         self,
         input_data,
         system_prompt=None,
-        user_prompt=None,
+        context_prompt=None,
         input_prompt=None,
+        user_prompt=None,
         budget=6,
         budget_unit="sentences",
         verbose=False,
         **generation_kwargs,
     ):
-        if user_prompt is None:
-            user_prompt = self.user_prompt
         if system_prompt is None:
             system_prompt = self.system_prompt
+        if context_prompt is None:
+            context_prompt = self.context_prompt
         if input_prompt is None:
             input_prompt = self.input_prompt
+        if user_prompt is None:
+            user_prompt = self.user_prompt
 
         # a naive way of converting unit to singular...
         if budget == 1 and budget_unit[-1].lower() == "s":
@@ -219,16 +234,25 @@ class PromptBasedLM(BaseLM):
         if system_prompt:
             system_prompt = system_prompt.format(**prompt_args)
             prompt.append({"role": "system", "content": system_prompt})
+            self._system_prompt = system_prompt
+
+        if context_prompt:
+            context_prompt = context_prompt.format(**prompt_args)
+            prompt.append({"role": "user", "content": context_prompt})
+            self._context_prompt = context_prompt
 
         if input_prompt:
             input_prompt = input_prompt.format(**prompt_args)
             prompt.append({"role": "input", "content": input_prompt})
+            self._input_prompt = input_prompt
 
         if user_prompt:
             user_prompt = user_prompt.format(**prompt_args)
             prompt.append({"role": "user", "content": user_prompt})
+            self._user_prompt = user_prompt
 
         log(logger, f"System prompt: {pformat(system_prompt)}", verbose=verbose)
+        log(logger, f"Context prompt: {pformat(context_prompt)}", verbose=verbose)
         log(logger, f"Input prompt: {pformat(input_prompt)}", verbose=verbose)
         log(logger, f"User prompt: {pformat(user_prompt)}", verbose=verbose)
         return prompt, generation_kwargs

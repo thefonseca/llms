@@ -121,8 +121,16 @@ class InstructTunedClassifier(BaseClassifier):
         return output
 
 
-class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
-    def __init__(self, model_name, labels, prior_normalization=False, **kwargs) -> None:
+class CausalLMClassifier(HFClassifier, InstructCausalLM):
+    def __init__(
+        self,
+        model_name,
+        labels,
+        prior_normalization=False,
+        noisy_channel=False,
+        **kwargs,
+    ) -> None:
+        self.noisy_channel = noisy_channel
         super().__init__(model_name, labels, **kwargs)
         self.prior_normalization = prior_normalization
         self.prior_label_probs = {}
@@ -137,10 +145,11 @@ class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
         kwargs = super().process_generation_kwargs(**generation_kwargs)
         if "prior_normalization" not in kwargs:
             kwargs["prior_normalization"] = self.prior_normalization
+        if "noisy_channel" not in kwargs:
+            kwargs["noisy_channel"] = self.noisy_channel
         return kwargs
 
     def _get_label_probs(self, encoded_input, label_log_probs):
-        # input_log_probs = input_log_probs.view(len(labels), -1)
         input_len = encoded_input.input_ids.shape[1]
         start_idx = max(0, input_len - 2)
         labels_scores = label_log_probs[:, start_idx:]
@@ -156,25 +165,32 @@ class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
         return label_probs.detach().numpy()
 
     def get_scores_for_labels(
-        self, model_input, labels, model, tokenizer, prior_normalization
+        self, model_input, labels, model, tokenizer, prior_normalization, noisy_channel
     ):
-        model_input = model_input.strip() + " "
         if isinstance(labels, dict):
-            _labels = sorted(list(labels.keys()))
-        else:
-            _labels = labels
+            labels = sorted(list(labels.keys()))
 
-        model_inputs = [model_input]
         prior_label_probs = None
-        if prior_normalization:
+
+        if noisy_channel:
+            model_inputs_ = [f"{self._context_prompt}\n\n{l}:" for l in labels]
+            labels_ = [self.input_data]
+            model_inputs = model_inputs_
+        else:
+            model_inputs = [model_input]
+            labels_ = labels
+
+        if not noisy_channel and prior_normalization:
             prior_label_probs = [
                 self.prior_label_probs[l] for l in labels if l in self.prior_label_probs
             ]
-            if len(prior_label_probs) < len(_labels):
+            if len(prior_label_probs) < len(labels):
                 prior_label_probs = None
-                model_inputs.append(f"{self.label_type}: ")
+                label_type = self.label_type.capitalize()
+                model_inputs.append(f"{label_type}:")
 
-        inputs_and_labels = [f"{x}{l}" for x in model_inputs for l in _labels]
+        model_inputs = [x.strip() + " " for x in model_inputs]
+        inputs_and_labels = [f"{x}{l}" for x in model_inputs for l in labels_]
 
         # Get encodings
         tokenizer.pad_token = tokenizer.eos_token
@@ -206,19 +222,25 @@ class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
         # Compute the log probabilities associated with each of the labels
         logits = logits.type(torch.float32).to(target_enc.device)
         log_probs = F.cross_entropy(logits, target_enc, reduction="none")
-        log_probs = log_probs.view(len(model_inputs), len(labels), -1)
+        log_probs = log_probs.view(len(model_inputs), len(labels_), -1)
+
+        if noisy_channel:
+            log_probs = torch.transpose(log_probs, 0, 1)
+
         label_probs = self._get_label_probs(inputs_enc[0], log_probs[0])
-        
-        if prior_normalization:
+
+        if not noisy_channel and prior_normalization:
             if prior_label_probs is None:
                 prior_label_probs = self._get_label_probs(inputs_enc[1], log_probs[1])
-                for idx, label in enumerate(_labels):
+                for idx, label in enumerate(labels):
                     self.prior_label_probs[label] = prior_label_probs[idx]
-                logger.info(f"Prior label probabilities:\n{pformat(self.prior_label_probs)}")
+                logger.info(
+                    f"Prior label probabilities:\n{pformat(self.prior_label_probs)}"
+                )
             label_probs /= prior_label_probs
 
-        dist = [(label, prob) for label, prob in zip(_labels, label_probs)]
-        label = _labels[np.argmax(label_probs)]
+        dist = [(label, prob) for label, prob in zip(labels, label_probs)]
+        label = labels[np.argmax(label_probs)]
         output = dict(text=self.input_data, distribution=dist, label=label)
         return output
 
@@ -228,7 +250,8 @@ class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
         model_name,
         model_input,
         labels,
-        prior_normalization,
+        prior_normalization=False,
+        noisy_channel=False,
         memoizer_ignore_cache=False,
         **kwargs,
     ):
@@ -236,7 +259,7 @@ class DirectCausalLMClassifier(HFClassifier, InstructCausalLM):
         model = self.load_model(**model_kwargs)
         tokenizer = self.load_tokenizer()
         return self.get_scores_for_labels(
-            model_input, labels, model, tokenizer, prior_normalization
+            model_input, labels, model, tokenizer, prior_normalization, noisy_channel
         )
 
     def postprocess(self, output):
@@ -326,9 +349,7 @@ class DynamicContextClassifier(BaseClassifier):
         return output
 
 
-class DynamicContextDirectClassifier(
-    DynamicContextClassifier, DirectCausalLMClassifier
-):
+class DynamicContextDirectClassifier(DynamicContextClassifier, CausalLMClassifier):
     def __init__(self, model_name, labels, **kwargs) -> None:
         super().__init__(model_name, labels, **kwargs)
 
