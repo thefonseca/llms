@@ -99,17 +99,20 @@ class InstructTunedClassifier(BaseClassifier):
             logger.warning(f"Prediction is empty")
 
         elif output.lower() not in target_labels:
-            output = re.sub(r"(C|c)ategory:\s*", "", output)
-            output = re.sub(r"^-\s*", "", output)
             if not self.multi_label:
                 output = output.split(",")[0]
             output = output.strip()
 
+            found_labels = [label for label in self.labels if label.lower() in output.lower()]
+            if len(found_labels) == 1:
+                logger.warning(f'Fixing prediction: "{output}" => "{found_labels[0]}"')
+                output = found_labels[0]
+            
             if output.lower() not in target_labels:
                 for label in self.labels:
                     # some models output truncated labels
                     if output.lower() == label.lower()[: len(output)]:
-                        logger.warning(f"Fixing prediction: {output} => {label}")
+                        logger.warning(f'Fixing prediction: "{output}" => "{label}"')
                         output = label
                         break
                 else:
