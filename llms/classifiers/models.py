@@ -66,8 +66,9 @@ class HFClassifier(BaseClassifier, HFModel):
 
 
 class InstructTunedClassifier(BaseClassifier):
-    def __init__(self, model_name, labels, **kwargs) -> None:
+    def __init__(self, model_name, labels, multi_label=False, **kwargs) -> None:
         super().__init__(model_name, labels, **kwargs)
+        self.multi_label = multi_label
 
     def get_prompt_args(self):
         args = super().get_prompt_args()
@@ -84,7 +85,7 @@ class InstructTunedClassifier(BaseClassifier):
     def default_user_prompt(self):
         return (
             "\nClassify the text above into one of the following categories:\n{labels}\n"
-            "Be concise and only write the category name."
+            "Be concise and write only the category name."
             "\n{label_type}:"
         )
 
@@ -99,6 +100,9 @@ class InstructTunedClassifier(BaseClassifier):
 
         elif output.lower() not in target_labels:
             output = re.sub(r"(C|c)ategory:\s*", "", output)
+            output = re.sub(r"^-\s*", "", output)
+            if not self.multi_label:
+                output = output.split(",")[0]
             output = output.strip()
 
             if output.lower() not in target_labels:
@@ -377,6 +381,11 @@ class LlamaChatClassifier(InstructTunedClassifier, LlamaChat):
         return None
 
 
-class OpenAIClassifier(OpenAIChat, InstructTunedClassifier):
+class OpenAIClassifier(InstructTunedClassifier, OpenAIChat):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
+
+    def postprocess(self, output):
+        output = output["choices"][0]["message"]["content"]
+        output = super().postprocess(output)
+        return output

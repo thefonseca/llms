@@ -10,7 +10,7 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
 class OpenAIChat(PromptBasedLM):
-    def __init__(self, model_name, request_interval=30, **kwargs) -> None:
+    def __init__(self, model_name, request_interval=10, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
         self.tokenizer = self.load_tokenizer()
         # wait an interval in seconds between requests
@@ -72,6 +72,7 @@ class OpenAIChat(PromptBasedLM):
         return prompt, truncated_tokens, generation_kwargs
 
     def postprocess(self, output):
-        output = output["choices"][0]["message"]["content"]
+        if not isinstance(output, str):
+            output = output["choices"][0]["message"]["content"]
         output = super().postprocess(output)
         return output
