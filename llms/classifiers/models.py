@@ -78,16 +78,18 @@ class InstructTunedClassifier(BaseClassifier):
             labels = "\n".join(labels)
         args["labels"] = labels
         return args
+    
+    def default_context_prompt(self):
+        return (
+            "Classify the text below into one of the following categories:\n{labels}"
+            "\nBe concise and write only the category name."
+        )
 
     def default_input_prompt(self):
         return "{input_type}: {input}"
 
     def default_user_prompt(self):
-        return (
-            "\nClassify the text above into one of the following categories:\n{labels}\n"
-            "Be concise and write only the category name."
-            "\n{label_type}:"
-        )
+        return "{label_type}:"
 
     def fix_prediction(self, output):
         if isinstance(self.labels, (list, tuple, dict)):
