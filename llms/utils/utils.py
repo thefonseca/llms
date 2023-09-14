@@ -67,7 +67,7 @@ def sent_tokenize(text):
 def get_output_path(
     output_dir,
     dataset_name,
-    dataset_config,
+    dataset_config=None,
     split=None,
     model_name=None,
     timestr=None,
@@ -135,7 +135,13 @@ def full_dataset_name(dataset_name, dataset_config):
 
 
 def config_logging(
-    dataset_name, dataset_config, split, output_dir, prefix=None, run_id=None
+    dataset_name="run",
+    dataset_config=None,
+    split=None,
+    output_dir=None,
+    prefix=None,
+    run_id=None,
+    **kwargs,
 ):
     timestr = time.strftime("%Y%m%d-%H%M%S")
 
