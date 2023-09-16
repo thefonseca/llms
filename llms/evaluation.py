@@ -313,7 +313,14 @@ def evaluate_model(
             parallelize=parallelize,
             **_kwargs,
         )
-        return sources, predictions, targets, scores, agg_scores
+        result = dict(
+            predictions=predictions,
+            targets=targets,
+            scores=scores,
+            agg_scores=agg_scores,
+            output_path=save_to,
+        )
+        return result
 
 
 if __name__ == "__main__":
