@@ -146,7 +146,7 @@ def evaluate(
         preds_df.to_csv(preds_filename, index=False)
         save_scores(scores, agg_scores, save_to)
 
-    return scores
+    return scores, agg_scores
 
 
 def evaluate_model(
@@ -304,7 +304,7 @@ def evaluate_model(
         _kwargs = {}
         if "seed" in kwargs:
             _kwargs["seed"] = kwargs.get("seed")
-        scores = evaluate(
+        scores, agg_scores = evaluate(
             predictions,
             sources,
             metrics,
@@ -313,7 +313,7 @@ def evaluate_model(
             parallelize=parallelize,
             **_kwargs,
         )
-        return sources, predictions, targets, scores
+        return sources, predictions, targets, scores, agg_scores
 
 
 if __name__ == "__main__":

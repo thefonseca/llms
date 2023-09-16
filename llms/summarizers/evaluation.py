@@ -55,13 +55,13 @@ def evaluate_summarizer(model_name=None, **kwargs):
         model_class = get_summarizer_model_class(model_name)
     metrics = kwargs.pop("metrics", [])
     metrics.append(summarization_metrics)
-
-    evaluate_model(
+    result = evaluate_model(
         model_name=model_name,
         model_class=model_class,
         metrics=metrics,
         **kwargs,
     )
+    return result
 
 
 if __name__ == "__main__":
