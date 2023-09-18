@@ -33,17 +33,11 @@ class BaseClassifier(BaseLM):
     def get_prompt_args(self):
         label_type = self.label_type.capitalize()
         input_type = self.input_type.capitalize()
-        return dict(label_type=label_type, input_type=input_type)
-
-    def process_generation_kwargs(self, **generation_kwargs):
-        kwargs = super().process_generation_kwargs(**generation_kwargs)
-        if "labels" not in kwargs:
-            kwargs["labels"] = self.labels
-        if "label_type" not in kwargs:
-            kwargs["label_type"] = self.label_type
-        if "input_type" not in kwargs:
-            kwargs["input_type"] = self.input_type
-        return kwargs
+        labels = self.labels
+        if isinstance(labels, (list, tuple, dict)):
+            labels = [f"- {label}" for label in labels]
+            labels = "\n".join(labels)
+        return dict(labels=labels, label_type=label_type, input_type=input_type)
 
     def postprocess(self, output):
         output = super().postprocess(output)
@@ -70,15 +64,6 @@ class InstructTunedClassifier(BaseClassifier):
         super().__init__(model_name, labels, **kwargs)
         self.multi_label = multi_label
 
-    def get_prompt_args(self):
-        args = super().get_prompt_args()
-        labels = self.labels
-        if isinstance(labels, (list, tuple, dict)):
-            labels = [f"- {label}" for label in labels]
-            labels = "\n".join(labels)
-        args["labels"] = labels
-        return args
-    
     def default_context_prompt(self):
         return (
             "Classify the text below into one of the following categories:\n{labels}"
@@ -104,12 +89,13 @@ class InstructTunedClassifier(BaseClassifier):
             if not self.multi_label:
                 output = output.split(",")[0]
             output = output.strip()
-
-            found_labels = [label for label in self.labels if label.lower() in output.lower()]
+            found_labels = [
+                label for label in self.labels if label.lower() in output.lower()
+            ]
             if len(found_labels) == 1:
                 logger.warning(f'Fixing prediction: "{output}" => "{found_labels[0]}"')
                 output = found_labels[0]
-            
+
             if output.lower() not in target_labels:
                 for label in self.labels:
                     # some models output truncated labels
@@ -152,6 +138,12 @@ class CausalLMClassifier(HFClassifier, InstructCausalLM):
 
     def process_generation_kwargs(self, **generation_kwargs):
         kwargs = super().process_generation_kwargs(**generation_kwargs)
+        if "labels" not in kwargs:
+            kwargs["labels"] = self.labels
+        if "label_type" not in kwargs:
+            kwargs["label_type"] = self.label_type
+        if "input_type" not in kwargs:
+            kwargs["input_type"] = self.input_type
         if "prior_normalization" not in kwargs:
             kwargs["prior_normalization"] = self.prior_normalization
         if "noisy_channel" not in kwargs:
