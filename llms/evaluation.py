@@ -164,6 +164,7 @@ def evaluate_model(
     prediction_key="prediction",
     max_samples=None,
     shuffle=False,
+    preprocess_fn=None,
     output_dir=None,
     cache_start=0,
     cache_end=None,
@@ -231,6 +232,9 @@ def evaluate_model(
         except:
             logger.warning(f"Target '{target_key}' not found in dataset")
 
+    if preprocess_fn:
+        sources, targets = preprocess_fn(sources, targets, max_samples=max_samples, logger=logger)
+    
     if shuffle:
         seed = kwargs.get("seed")
         logger.info(f"Shuffling data using seed: {seed}")
