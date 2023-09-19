@@ -376,6 +376,10 @@ class LlamaChatClassifier(InstructTunedClassifier, LlamaChat):
 
     def default_system_prompt(self):
         return None
+    
+    def fix_prediction(self, output):
+        output = output.replace("] ", "").strip()
+        return super().fix_prediction(output)
 
 
 class OpenAIClassifier(InstructTunedClassifier, OpenAIChat):
