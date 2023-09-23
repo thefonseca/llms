@@ -1,7 +1,6 @@
 import logging
 from pprint import pformat
 import random
-import re
 
 import numpy as np
 import torch
@@ -86,8 +85,8 @@ class InstructTunedClassifier(BaseClassifier):
             logger.warning(f"Prediction is empty")
 
         elif output.lower() not in target_labels:
-            if not self.multi_label:
-                output = output.split(",")[0]
+            # if not self.multi_label:
+            #     output = output.split(",")[0]
             output = output.strip()
             found_labels = [
                 label for label in self.labels if label.lower() in output.lower()

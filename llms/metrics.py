@@ -239,6 +239,9 @@ def abstractiveness(source, prediction):
 
 
 def text_statistics(text, prefix=None):
+    if isinstance(text, dict):
+        text = "\n".join(text.values())
+
     if isinstance(text, list):
         sentences = text
         text = "\n".join(text)

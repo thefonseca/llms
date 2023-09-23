@@ -22,6 +22,33 @@ from .utils.utils import config_logging, get_output_path
 logger = logging.getLogger(__name__)
 
 
+def _get_samples_for_key(data, key):
+    samples = None
+
+    if isinstance(key, str):
+        samples = data[key]
+    elif isinstance(key, dict):
+        samples = []
+        try:
+            for template_key, data_key in key.items():
+                data_values = data[data_key]
+                for idx, val in enumerate(data_values):
+                    if len(samples) <= idx:
+                        sample = {template_key: val}
+                        samples.append(sample)
+                    else:
+                        samples[idx][template_key] = val
+        except:
+            logger.warning(f"'Source/target {key}' not found in dataset")
+            samples = None
+    else:
+        logger.warning(
+            f"Source/target key must be a string or dict but is of type {type(key)}"
+        )
+
+    return samples
+
+
 def _aggregate_parallel_scores(p_results):
     results = {}
     for result in p_results:
@@ -224,17 +251,14 @@ def evaluate_model(
         )
         eval_data = eval_data[split]
 
-    sources = eval_data[source_key]
-    targets = None
-    if target_key:
-        try:
-            targets = eval_data[target_key]
-        except:
-            logger.warning(f"Target '{target_key}' not found in dataset")
+    sources = _get_samples_for_key(eval_data, source_key)
+    targets = _get_samples_for_key(eval_data, target_key) if target_key else None
 
     if preprocess_fn:
-        sources, targets = preprocess_fn(sources, targets, max_samples=max_samples, logger=logger)
-    
+        sources, targets = preprocess_fn(
+            sources, targets, max_samples=max_samples, logger=logger
+        )
+
     if shuffle:
         seed = kwargs.get("seed")
         logger.info(f"Shuffling data using seed: {seed}")
