@@ -166,7 +166,7 @@ class HFModel(BaseLM):
         generation_kwargs = self.process_generation_kwargs(**generation_kwargs)
         return prompt, truncated_tokens, generation_kwargs
 
-    @memoize(ignore_kwargs=["model_path"])
+    @memoize(ignore_kwargs=["model_path", "max_memory"])
     def generate_cached(
         self,
         model_name,

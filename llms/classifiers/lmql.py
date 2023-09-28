@@ -64,7 +64,7 @@ class LMQLInstructClassifier(InstructTunedClassifier, HFModel):
         prompt = prompt.replace("\n", "\\n")
         return prompt
 
-    @memoize()
+    @memoize(ignore_kwargs=["model_path", "max_memory"])
     def generate_cached(
         self,
         model_name,
