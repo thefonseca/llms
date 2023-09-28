@@ -88,9 +88,9 @@ class InstructTunedClassifier(BaseClassifier):
             # if not self.multi_label:
             #     output = output.split(",")[0]
             output = output.strip()
-            found_labels = [
+            found_labels = list(set([
                 label for label in self.labels if label.lower() in output.lower()
-            ]
+            ]))
             if len(found_labels) == 1:
                 logger.warning(f'Fixing prediction: "{output}" => "{found_labels[0]}"')
                 output = found_labels[0]
@@ -244,7 +244,7 @@ class CausalLMClassifier(HFClassifier, InstructCausalLM):
         output = dict(text=self.input_data, distribution=dist, label=label)
         return output
 
-    @memoize(ignore_kwargs=["model_path"])
+    @memoize(ignore_kwargs=["model_path", "max_memory"])
     def generate_cached(
         self,
         model_name,
