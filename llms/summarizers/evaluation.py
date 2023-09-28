@@ -14,7 +14,8 @@ from .huggingface import (
     InstructCausalLMSummarizer,
     AlpacaSummarizer,
     VicunaSummarizer,
-    LlamaSummarizer,
+    LlamaChatSummarizer,
+    FalconChatSummarizer,
 )
 from .openai import OpenAISummarizer
 from .cohere import CohereSummarizer
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 MODEL_MAP = {
     "gpt-[-\d\w]*": OpenAISummarizer,
     "facebook/opt-[\d\w]+": CausalLMSummarizer,
-    ".*llama-?2.*chat.*": LlamaSummarizer,
+    ".*llama-?2.*chat.*": LlamaChatSummarizer,
     ".*llama.*": CausalLMSummarizer,
     "bigscience/T0[_\d\w]*": InstructText2TextSummarizer,
     "google/flan-t5[-\d\w]+": InstructText2TextSummarizer,
@@ -34,9 +35,10 @@ MODEL_MAP = {
     ".*vicuna.*": VicunaSummarizer,
     "summarize-((medium)|(xlarge))": CohereSummarizer,
     "mosaicml/mpt[-\d\w]$": CausalLMSummarizer,
+    "tiiuae/falcon[-\d\w]+chat": FalconChatSummarizer,
+    "tiiuae/falcon[-\d\w]+instruct": InstructCausalLMSummarizer,
     "tiiuae/falcon[-\d\w]$": CausalLMSummarizer,
     "mosaicml/mpt[-\d\w]+instruct": AlpacaSummarizer,
-    "tiiuae/falcon[-\d\w]+instruct": InstructCausalLMSummarizer,
 }
 
 

@@ -13,6 +13,7 @@ from ..models.huggingface import (
     Alpaca,
     Vicuna,
     LlamaChat,
+    FalconChat,
 )
 from ..models.openai import OpenAIChat
 from ..utils.memoizer import memoize
@@ -88,9 +89,9 @@ class InstructTunedClassifier(BaseClassifier):
             # if not self.multi_label:
             #     output = output.split(",")[0]
             output = output.strip()
-            found_labels = list(set([
-                label for label in self.labels if label.lower() in output.lower()
-            ]))
+            found_labels = list(
+                set([label for label in self.labels if label.lower() in output.lower()])
+            )
             if len(found_labels) == 1:
                 logger.warning(f'Fixing prediction: "{output}" => "{found_labels[0]}"')
                 output = found_labels[0]
@@ -375,10 +376,15 @@ class LlamaChatClassifier(InstructTunedClassifier, LlamaChat):
 
     def default_system_prompt(self):
         return None
-    
+
     def fix_prediction(self, output):
         output = output.replace("] ", "").strip()
         return super().fix_prediction(output)
+
+
+class FalconChatClassifier(FalconChat, InstructCausalLMClassifier):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
 
 
 class OpenAIClassifier(InstructTunedClassifier, OpenAIChat):

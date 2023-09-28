@@ -7,6 +7,7 @@ from ..models.huggingface import (
     Alpaca,
     Vicuna,
     LlamaChat,
+    FalconChat,
 )
 
 
@@ -62,6 +63,11 @@ class VicunaSummarizer(InstructCausalLMSummarizer, Vicuna):
         super().__init__(model_name, **kwargs)
 
 
-class LlamaSummarizer(InstructCausalLMSummarizer, LlamaChat):
+class LlamaChatSummarizer(InstructCausalLMSummarizer, LlamaChat):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
+
+
+class FalconChatSummarizer(InstructCausalLMSummarizer, FalconChat):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)

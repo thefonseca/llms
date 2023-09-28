@@ -478,3 +478,25 @@ class LlamaChat(InstructCausalLM):
         if "temperature" not in generation_kwargs:
             generation_kwargs["temperature"] = 0.8
         return generation_kwargs
+    
+
+class FalconChat(InstructCausalLM):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
+
+    def default_max_tokens(self):
+        return 2048
+    
+    def prompt_to_text(self, prompt):
+        system_prompt = [m for m in prompt if m["role"] == "system"]
+        user_message = [m for m in prompt if m["role"] in ["input", "user"]]
+        user_message = "\n".join([m["content"] for m in user_message])
+
+        if system_prompt:
+            system_prompt = system_prompt[0]["content"]
+            prompt_text = (
+                f"System: {system_prompt}\nUser: {user_message}\nFalcon:"
+            )
+        else:
+            prompt_text = f"User: {user_message}\nFalcon:"
+        return prompt_text

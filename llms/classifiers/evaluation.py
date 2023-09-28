@@ -18,6 +18,7 @@ from .models import (
     AlpacaClassifier,
     VicunaClassifier,
     LlamaChatClassifier,
+    FalconChatClassifier,
     OpenAIClassifier,
 )
 
@@ -35,6 +36,7 @@ MODEL_MAP = {
     ".*alpaca.*": AlpacaClassifier,
     ".*vicuna.*": VicunaClassifier,
     "mosaicml/mpt[-\d\w]+instruct": AlpacaClassifier,
+    "tiiuae/falcon[-\d\w]+chat": FalconChatClassifier,
     "tiiuae/falcon[-\d\w]+instruct": InstructCausalLMClassifier,
 }
 
