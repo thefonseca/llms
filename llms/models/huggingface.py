@@ -484,6 +484,11 @@ class FalconChat(InstructCausalLM):
     def default_max_tokens(self):
         return 2048
     
+    def load_tokenizer(self):
+        tokenizer = super().load_tokenizer()
+        tokenizer.pad_token = tokenizer.eos_token
+        return tokenizer
+    
     def prompt_to_text(self, prompt):
         system_prompt = [m for m in prompt if m["role"] == "system"]
         user_message = [m for m in prompt if m["role"] in ["input", "user"]]
