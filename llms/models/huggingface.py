@@ -126,13 +126,20 @@ class HFModel(BaseLM):
         return max_tokens
 
     def infer_device_map(
-        self, model_path, device_map="auto", max_memory=None, dtype=None
+        self,
+        model_path,
+        device_map="auto",
+        max_memory=None,
+        dtype=None,
+        tie_weights=False,
     ):
         # Example: max_memory = {0: "22GiB", "cpu": "30GiB"}
         if max_memory:
             logger.info(f"Inferring device map for {max_memory}...")
             with init_empty_weights():
                 model = AutoModelForCausalLM.from_pretrained(model_path)
+            if tie_weights:
+                model.tie_weights()
             device_map = infer_auto_device_map(
                 model,
                 max_memory=max_memory,
@@ -235,6 +242,7 @@ class Text2TextLM(HFModel):
         max_memory=None,
         low_cpu_mem_usage=True,
         load_in_8bit=False,
+        tie_weights=False,
         dtype="auto",
         **kwargs,
     ):
@@ -242,9 +250,6 @@ class Text2TextLM(HFModel):
             return self.model
 
         logger.info(f"Loading model {self.model_path}...")
-        if load_in_8bit:
-            dtype = torch.int8
-
         if any(
             [x in self.model_path] for x in ["google/pegasus", "google/bigbird-pegasus"]
         ):
@@ -252,7 +257,10 @@ class Text2TextLM(HFModel):
             low_cpu_mem_usage = False
         else:
             device_map = self.infer_device_map(
-                self.model_path, max_memory=max_memory, dtype=dtype
+                self.model_path,
+                max_memory=max_memory,
+                tie_weights=tie_weights,
+                dtype=dtype,
             )
 
         model = AutoModelForSeq2SeqLM.from_pretrained(
@@ -332,6 +340,7 @@ class CausalLM(HFModel):
         max_memory=None,
         low_cpu_mem_usage=True,
         load_in_8bit=False,
+        tie_weights=False,
         dtype="auto",
         **kwargs,
     ):
@@ -340,7 +349,11 @@ class CausalLM(HFModel):
 
         logger.info(f"Loading model {self.model_path}...")
         device_map = self.infer_device_map(
-            self.model_path, device_map=device_map, max_memory=max_memory, dtype=dtype
+            self.model_path,
+            device_map=device_map,
+            max_memory=max_memory,
+            tie_weights=tie_weights,
+            dtype=dtype,
         )
         model = AutoModelForCausalLM.from_pretrained(
             self.model_path,
@@ -439,7 +452,7 @@ class LlamaChat(InstructCausalLM):
 
     def default_max_tokens(self):
         return 4096
-    
+
     def load_tokenizer(self):
         tokenizer = super().load_tokenizer()
         tokenizer.pad_token = tokenizer.eos_token
@@ -475,7 +488,7 @@ class LlamaChat(InstructCausalLM):
         if "temperature" not in generation_kwargs:
             generation_kwargs["temperature"] = 0.8
         return generation_kwargs
-    
+
 
 class FalconChat(InstructCausalLM):
     def __init__(self, model_name, **kwargs) -> None:
@@ -483,12 +496,12 @@ class FalconChat(InstructCausalLM):
 
     def default_max_tokens(self):
         return 2048
-    
+
     def load_tokenizer(self):
         tokenizer = super().load_tokenizer()
         tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
-    
+
     def prompt_to_text(self, prompt):
         system_prompt = [m for m in prompt if m["role"] == "system"]
         user_message = [m for m in prompt if m["role"] in ["input", "user"]]
@@ -496,9 +509,7 @@ class FalconChat(InstructCausalLM):
 
         if system_prompt:
             system_prompt = system_prompt[0]["content"]
-            prompt_text = (
-                f"System: {system_prompt}\nUser: {user_message}\nFalcon:"
-            )
+            prompt_text = f"System: {system_prompt}\nUser: {user_message}\nFalcon:"
         else:
             prompt_text = f"User: {user_message}\nFalcon:"
         return prompt_text
