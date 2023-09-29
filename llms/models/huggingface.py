@@ -339,9 +339,6 @@ class CausalLM(HFModel):
             return self.model
 
         logger.info(f"Loading model {self.model_path}...")
-        if load_in_8bit:
-            dtype = torch.int8
-
         device_map = self.infer_device_map(
             self.model_path, device_map=device_map, max_memory=max_memory, dtype=dtype
         )
