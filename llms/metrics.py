@@ -161,6 +161,9 @@ def get_confidence_interval(scores):
             "high": ci.confidence_interval.high.tolist(),
             "mean": np.mean(scores, axis=0).tolist(),
         }
+    elif len(scores) == 1:
+        confidence_interval["mean"] = scores[0]
+        
     return confidence_interval
 
 
