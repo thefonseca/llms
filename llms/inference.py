@@ -17,6 +17,7 @@ from .utils.utils import get_progress_bar, add_progress_task
 
 logger = logging.getLogger(__name__)
 
+MODEL_CACHE = {}
 
 DEFAULT_MODEL_MAP = {
     "gpt-[-\d\w]*": OpenAIChat,
@@ -74,6 +75,7 @@ def generate(
     max_length=256,
     cache_start=0,
     cache_end=None,
+    use_model_cache=False,
     ignore_errors=False,
     **kwargs,
 ):
@@ -93,6 +95,12 @@ def generate(
 
     logger.info(f"Using model: {model_class}")
     model = model_class(model_name, **model_kwargs)
+
+    if use_model_cache:
+        cached_model = MODEL_CACHE.get(model_name)
+        if cached_model and hasattr(cached_model, "model"):
+            model.model = cached_model.model
+        MODEL_CACHE[model_name] = model
 
     if hasattr(model, "token_statistics"):
         stats = model.token_statistics(
