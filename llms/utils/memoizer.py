@@ -48,15 +48,30 @@ def _call_func(func, self, *args, **kwargs):
 
 
 def _get_item(cache_provider, key, func, self, expire, ignore_cache, *args, **kwargs):
-    with Cache(cache_provider.directory) as cache:
-        result = cache.get(key, default=constants.CACHE_MISS, retry=True)
+    if isinstance(cache_provider, Cache):
+        with Cache(cache_provider.directory) as cache:
+            result = cache.get(key, default=constants.CACHE_MISS, retry=True)
+            cache_hit = result != constants.CACHE_MISS
+
+            if ignore_cache or not cache_hit:
+                result = _call_func(func, self, *args, **kwargs)
+                cache.set(key, result, expire=expire, retry=True)
+            else:
+                logger.debug(f"Item from cache: {key}")
+    
+    elif isinstance(cache_provider, dict):
+        result = cache_provider.get(key, constants.CACHE_MISS)
         cache_hit = result != constants.CACHE_MISS
 
         if ignore_cache or not cache_hit:
             result = _call_func(func, self, *args, **kwargs)
-            cache.set(key, result, expire=expire, retry=True)
+            cache_provider[key] = result
         else:
-            logger.debug(f"Item from cache: {key}")
+            logger.info(f"Item from cache: {key}")
+
+    else:
+        raise ValueError(f"Cache provider not supported: {cache_provider}")
+
     return result, cache_hit
 
 
@@ -107,7 +122,7 @@ def memoize(
 
     if ignore_kwargs is not None and not isinstance(ignore_kwargs, list):
         raise ValueError(
-            f"ignore_kwargs is supposed to be a list, not {type(use_kwargs)}"
+            f"ignore_kwargs is supposed to be a list, not {type(ignore_kwargs)}"
         )
 
     def _memoize(func):
