@@ -19,6 +19,7 @@ from .models import (
     VicunaClassifier,
     LlamaChatClassifier,
     FalconChatClassifier,
+    MistralInsructClassifier,
     OpenAIClassifier,
 )
 
@@ -38,6 +39,7 @@ MODEL_MAP = {
     "mosaicml/mpt[-\d\w]+instruct": AlpacaClassifier,
     "tiiuae/falcon[-\d\w]+chat": FalconChatClassifier,
     "tiiuae/falcon[-\d\w]+instruct": InstructCausalLMClassifier,
+    "mistralai/Mistral[-\d\w]+Instruct.*": MistralInsructClassifier,
 }
 
 
@@ -69,11 +71,10 @@ def evaluate_classifier(model_name=None, **kwargs):
         model_class = get_model_class(
             model_name, model_map=MODEL_MAP, default_class=InstructCausalLMClassifier
         )
+    metrics = kwargs.pop("metrics", [])
+    metrics.append(classification_metrics)
     result = evaluate_model(
-        model_name=model_name,
-        model_class=model_class,
-        metrics=classification_metrics,
-        **kwargs,
+        model_name=model_name, model_class=model_class, metrics=metrics, **kwargs
     )
     return result
 

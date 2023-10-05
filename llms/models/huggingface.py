@@ -501,6 +501,11 @@ class FalconChat(InstructCausalLM):
         tokenizer = super().load_tokenizer()
         tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
+    
+    def process_generation_kwargs(self, **generation_kwargs):
+        generation_kwargs = super().process_generation_kwargs(**generation_kwargs)
+        generation_kwargs["pad_token_id"] = self.load_tokenizer().eos_token_id
+        return generation_kwargs
 
     def prompt_to_text(self, prompt):
         system_prompt = [m for m in prompt if m["role"] == "system"]
@@ -512,4 +517,23 @@ class FalconChat(InstructCausalLM):
             prompt_text = f"System: {system_prompt}\nUser: {user_message}\nFalcon:"
         else:
             prompt_text = f"User: {user_message}\nFalcon:"
+        return prompt_text
+
+
+class MistralInstruct(LlamaChat):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
+
+    def default_system_prompt(self):
+        return None
+    
+    def process_generation_kwargs(self, **generation_kwargs):
+        generation_kwargs = super().process_generation_kwargs(**generation_kwargs)
+        generation_kwargs["input_length_adjust"] = -2
+        generation_kwargs["pad_token_id"] = self.load_tokenizer().eos_token_id
+        return generation_kwargs
+
+    def prompt_to_text(self, prompt):
+        prompt_text = super().prompt_to_text(prompt)
+        prompt_text = f"<s>{prompt_text}"
         return prompt_text

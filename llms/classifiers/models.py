@@ -14,6 +14,7 @@ from ..models.huggingface import (
     Vicuna,
     LlamaChat,
     FalconChat,
+    MistralInstruct,
 )
 from ..models.openai import OpenAIChat
 from ..utils.memoizer import memoize
@@ -383,6 +384,11 @@ class LlamaChatClassifier(InstructTunedClassifier, LlamaChat):
 
 
 class FalconChatClassifier(FalconChat, InstructCausalLMClassifier):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
+
+
+class MistralInsructClassifier(MistralInstruct, InstructCausalLMClassifier):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
