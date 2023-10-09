@@ -1,3 +1,5 @@
+import re
+
 from .base import InstructTunedSummarizer
 from ..models.huggingface import (
     HFModel,
@@ -71,7 +73,7 @@ class LlamaChatSummarizer(InstructCausalLMSummarizer, LlamaChat):
         return None
 
     def postprocess(self, output):
-        output = output.replace("] ", "").strip()
+        output = re.sub(r"^\] ", "", output).strip()
         return super().postprocess(output)
 
 

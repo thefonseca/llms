@@ -1,6 +1,7 @@
 import logging
 from pprint import pformat
 import random
+import re
 
 import numpy as np
 import torch
@@ -379,7 +380,7 @@ class LlamaChatClassifier(InstructTunedClassifier, LlamaChat):
         return None
 
     def fix_prediction(self, output):
-        output = output.replace("] ", "").strip()
+        output = re.sub(r"^\] ", "", output).strip()
         return super().fix_prediction(output)
 
 
