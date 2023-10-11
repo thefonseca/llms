@@ -2,7 +2,12 @@ from ..metrics import generation_metrics, rouge_score, abstractiveness
 
 
 def summarization_metrics(
-    prediction, reference=None, source=None, rouge_ngrams=None, parallelized=False
+    prediction,
+    reference=None,
+    source=None,
+    rouge_ngrams=None,
+    parallelized=False,
+    index=None,
 ):
     metrics = generation_metrics(
         prediction, reference=reference, source=source, parallelized=parallelized

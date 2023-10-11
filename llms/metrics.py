@@ -163,12 +163,11 @@ def get_confidence_interval(scores):
         }
     elif len(scores) == 1:
         confidence_interval["mean"] = scores[0]
-        
+
     return confidence_interval
 
 
 def aggregate_metrics(metrics):
-
     def _add_scores(results_dict, key, scores):
         key_results = results_dict.get(key, [])
         key_results.append(scores)
@@ -188,7 +187,7 @@ def aggregate_metrics(metrics):
         elif isinstance(scores, list) and isinstance(scores[0], list):
             # This case cover metrics that are vectors
             for score in scores:
-                 _add_scores(results_dict, key, score)
+                _add_scores(results_dict, key, score)
         elif isinstance(scores, list):
             for score in scores:
                 _scores_dict_to_list(score, results_dict, key=key)
@@ -284,7 +283,9 @@ def rouge_score(prediction, reference, rouge_ngrams=None):
     return rouge.score(reference_str, prediction_str)
 
 
-def generation_metrics(prediction, reference=None, source=None, parallelized=False):
+def generation_metrics(
+    prediction, reference=None, source=None, index=None, parallelized=False
+):
     metrics = {}
     if source is not None:
         metrics["source_stats"] = text_statistics(source)
@@ -324,8 +325,12 @@ def compute_metric(
             sources = [None]
 
         results = []
-        for ref, pred, source in zip_longest(references, predictions, sources):
-            result = metric_fn(pred, reference=ref, source=source, **metric_kwargs)
+        for idx, (ref, pred, source) in enumerate(
+            zip_longest(references, predictions, sources)
+        ):
+            result = metric_fn(
+                pred, reference=ref, source=source, index=idx, **metric_kwargs
+            )
             results.append(result)
             if progress:
                 progress.update(task, advance=1)
@@ -382,5 +387,5 @@ def compute_metrics(
         )
 
         scores[metric_name] = metric_scores
-    
+
     return scores
