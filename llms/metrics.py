@@ -145,7 +145,16 @@ def log_metrics(scores):
 
 
 def get_confidence_interval(scores):
+    _scores = [x for x in scores if x]
+
+    if len(_scores) < len(scores):
+        null_count = len(scores) - len(_scores)
+        logger.warning(
+            f"Ignoring {null_count} null score values in confidence interval computation"
+        )
+    scores = _scores
     confidence_interval = {}
+
     if len(scores) > 1:
         ci = bootstrap(
             (scores,),
