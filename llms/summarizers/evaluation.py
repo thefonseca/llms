@@ -14,6 +14,7 @@ from .huggingface import (
     InstructCausalLMSummarizer,
     AlpacaSummarizer,
     VicunaSummarizer,
+    Llama2Summarizer,
     LlamaChatSummarizer,
     FalconChatSummarizer,
 )
@@ -27,6 +28,7 @@ MODEL_MAP = {
     "gpt-[-\d\w]*": OpenAISummarizer,
     "facebook/opt-[\d\w]+": CausalLMSummarizer,
     ".*llama-?2.*chat.*": LlamaChatSummarizer,
+    ".*llama-?2.*": Llama2Summarizer,
     ".*llama.*": CausalLMSummarizer,
     "bigscience/T0[_\d\w]*": InstructText2TextSummarizer,
     "google/flan-t5[-\d\w]+": InstructText2TextSummarizer,

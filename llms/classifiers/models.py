@@ -13,6 +13,7 @@ from ..models.huggingface import (
     InstructCausalLM,
     Alpaca,
     Vicuna,
+    Llama2,
     LlamaChat,
     FalconChat,
     MistralInstruct,
@@ -360,6 +361,11 @@ class DynamicContextDirectClassifier(DynamicContextClassifier, CausalLMClassifie
 class InstructCausalLMClassifier(InstructTunedClassifier, InstructCausalLM):
     def __init__(self, model_name, labels, **kwargs) -> None:
         super().__init__(model_name, labels, **kwargs)
+
+
+class Llama2Classifier(Llama2, CausalLMClassifier):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
 
 
 class AlpacaClassifier(Alpaca, InstructCausalLMClassifier):

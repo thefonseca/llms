@@ -446,7 +446,7 @@ class Vicuna(InstructCausalLM):
         return prompt_text
 
 
-class LlamaChat(InstructCausalLM):
+class Llama2(InstructCausalLM):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
@@ -457,6 +457,11 @@ class LlamaChat(InstructCausalLM):
         tokenizer = super().load_tokenizer()
         tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
+
+
+class LlamaChat(Llama2):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
 
     def default_system_prompt(self):
         return "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. "
@@ -501,7 +506,7 @@ class FalconChat(InstructCausalLM):
         tokenizer = super().load_tokenizer()
         tokenizer.pad_token = tokenizer.eos_token
         return tokenizer
-    
+
     def process_generation_kwargs(self, **generation_kwargs):
         generation_kwargs = super().process_generation_kwargs(**generation_kwargs)
         generation_kwargs["pad_token_id"] = self.load_tokenizer().eos_token_id
@@ -526,7 +531,7 @@ class MistralInstruct(LlamaChat):
 
     def default_system_prompt(self):
         return None
-    
+
     def process_generation_kwargs(self, **generation_kwargs):
         generation_kwargs = super().process_generation_kwargs(**generation_kwargs)
         generation_kwargs["input_length_adjust"] = -2

@@ -1,6 +1,6 @@
 import re
 
-from .base import InstructTunedSummarizer
+from .base import InstructTunedSummarizer, PromptBasedSummarizer
 from ..models.huggingface import (
     HFModel,
     Text2TextLM,
@@ -8,6 +8,7 @@ from ..models.huggingface import (
     InstructText2TextLM,
     Alpaca,
     Vicuna,
+    Llama2,
     LlamaChat,
     FalconChat,
 )
@@ -55,12 +56,22 @@ class InstructCausalLMSummarizer(InstructTunedSummarizer, CausalLMSummarizer):
         super().__init__(model_name, **kwargs)
 
 
+class PromptBasedCausalLMSummarizer(PromptBasedSummarizer, CausalLMSummarizer):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
+
+
 class AlpacaSummarizer(InstructCausalLMSummarizer, Alpaca):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
 
 class VicunaSummarizer(InstructCausalLMSummarizer, Vicuna):
+    def __init__(self, model_name, **kwargs) -> None:
+        super().__init__(model_name, **kwargs)
+
+
+class Llama2Summarizer(PromptBasedCausalLMSummarizer, Llama2):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
 
