@@ -145,7 +145,7 @@ def log_metrics(scores):
 
 
 def get_confidence_interval(scores):
-    _scores = [x for x in scores if x]
+    _scores = [x for x in scores if x is not None]
 
     if len(_scores) < len(scores):
         null_count = len(scores) - len(_scores)
