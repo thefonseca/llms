@@ -101,8 +101,8 @@ def eval_job(
 
 def evaluate(
     preds,
-    sources,
     metrics,
+    sources=None,
     targets=None,
     scores=None,
     save_to=None,
@@ -113,12 +113,7 @@ def evaluate(
     # this seed is for confidence interval estimation via bootstrapping
     np.random.seed(seed)
     preds = preds[:n_samples]
-    sources = sources[:n_samples]
     doc_ids = list(range(len(preds)))
-    if targets is not None:
-        _targets = targets[:n_samples]
-    else:
-        _targets = [None] * len(preds)
 
     if metrics is None:
         metrics = [generation_metrics]
@@ -148,13 +143,15 @@ def evaluate(
 
     parallel_scores = []
     if parallel_metrics:
+        _sources = [None] * len(preds) if sources is None else sources[:n_samples]
+        _targets = [None] * len(preds) if targets is None else targets[:n_samples]
         parallel_scores = p_map(
             lambda pred, target, source, doc_id: eval_job(
                 pred, target, source, doc_id, parallel_metrics
             ),
             preds,
             _targets,
-            sources,
+            _sources,
             doc_ids,
         )
 
@@ -180,7 +177,7 @@ def evaluate_model(
     dataset_name=None,
     dataset_config=None,
     split=None,
-    source_key="article",
+    source_key=None,
     target_key=None,
     source_file=None,
     arxiv_id=None,
@@ -269,7 +266,8 @@ def evaluate_model(
         if targets is not None:
             targets = [targets[idx] for idx in idxs]
 
-    sources = sources[:max_samples]
+    if sources is not None:
+        sources = sources[:max_samples]
     if targets is not None:
         targets = targets[:max_samples]
 
@@ -285,18 +283,23 @@ def evaluate_model(
         model_names.append(prediction_path)
 
     for model_name in model_names:
-        logger.info(f"Evaluating {model_name} on {len(sources)} samples.")
-
         if Path(model_name).suffix == ".csv":
             logger.info(f"Loading predictions from {model_name}...")
             prediction_data = pd.read_csv(model_name)
             predictions = prediction_data[prediction_key].values[:max_samples]
-            if len(predictions) != len(sources):
+            if sources is not None and len(predictions) != len(sources):
                 raise ValueError(
-                    f"Number of predictions from {model_name} ({len(prediction_data)}) "
+                    f"Number of predictions from {model_name} ({len(predictions)}) "
                     f"is incompatible with number of source documents ({len(sources)})."
                 )
+            elif targets is not None and len(predictions) != len(targets):
+                raise ValueError(
+                    f"Number of predictions from {model_name} ({len(predictions)}) "
+                    f"is incompatible with number of targets ({len(targets)})."
+                )
+            logger.info(f"Evaluating {model_name} on {len(predictions)} samples.")
         else:
+            logger.info(f"Evaluating {model_name} on {len(sources)} samples.")
             predictions = generate(
                 model_name,
                 sources,
@@ -334,8 +337,8 @@ def evaluate_model(
             _kwargs["seed"] = kwargs.get("seed")
         scores, agg_scores = evaluate(
             predictions,
-            sources,
             metrics,
+            sources=sources,
             targets=targets,
             save_to=save_to,
             parallelize=parallelize,
