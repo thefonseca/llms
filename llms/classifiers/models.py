@@ -92,12 +92,28 @@ class InstructTunedClassifier(BaseClassifier):
             # if not self.multi_label:
             #     output = output.split(",")[0]
             output = output.strip()
-            found_labels = list(
-                set([label for label in self.labels if label.lower() in output.lower()])
-            )
+            output_ = output.lower()
+            # try to find mentions of label between quotes first
+            found_labels = [
+                label for label in self.labels if f'"{label.lower()}"' in output_
+            ]
+            found_labels = list(set(found_labels))
+
             if len(found_labels) == 1:
                 logger.warning(f'Fixing prediction: "{output}" => "{found_labels[0]}"')
                 output = found_labels[0]
+            else:
+                # then label mentions without quotes
+                found_labels = [
+                    label for label in self.labels if label.lower() in output_
+                ]
+                found_labels = list(set(found_labels))
+
+                if len(found_labels) == 1:
+                    logger.warning(
+                        f'Fixing prediction: "{output}" => "{found_labels[0]}"'
+                    )
+                    output = found_labels[0]
 
             if output.lower() not in target_labels:
                 for label in self.labels:
