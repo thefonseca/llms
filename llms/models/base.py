@@ -280,6 +280,7 @@ class PromptBasedLM(BaseLM):
         self,
         inputs,
         truncation=True,
+        show_progress=True,
         **generation_kwargs,
     ):
         progress = get_progress_bar()
@@ -289,6 +290,7 @@ class PromptBasedLM(BaseLM):
             total=len(inputs),
             existing_ok=False,
         )
+        progress.update(task, visible=show_progress)
         truncated_tokens = []
         num_tokens = []
 

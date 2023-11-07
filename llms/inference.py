@@ -77,6 +77,7 @@ def generate(
     cache_end=None,
     use_model_cache=False,
     ignore_errors=False,
+    show_progress=True,
     **kwargs,
 ):
     outputs = []
@@ -87,6 +88,7 @@ def generate(
         total=len(sources),
         existing_ok=False,
     )
+    progress.update(task, visible=show_progress)
     cache_end = cache_end if cache_end is not None else len(sources)
     model_kwargs, generation_kwargs = parse_kwargs(kwargs)
 
@@ -104,7 +106,10 @@ def generate(
 
     if hasattr(model, "token_statistics"):
         stats = model.token_statistics(
-            sources, max_length=max_length, **generation_kwargs
+            sources,
+            max_length=max_length,
+            show_progress=show_progress,
+            **generation_kwargs,
         )
         logger.info(f"Token statistics for input:\n{pformat(stats)}")
 
