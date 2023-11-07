@@ -83,10 +83,6 @@ class LlamaChatSummarizer(InstructCausalLMSummarizer, LlamaChat):
     def default_system_prompt(self):
         return None
 
-    def postprocess(self, output):
-        output = re.sub(r"^\] ", "", output).strip()
-        return super().postprocess(output)
-
 
 class FalconChatSummarizer(InstructCausalLMSummarizer, FalconChat):
     def __init__(self, model_name, **kwargs) -> None:

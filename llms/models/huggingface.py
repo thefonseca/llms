@@ -480,10 +480,10 @@ class LlamaChat(Llama2):
         if system_prompt:
             system_prompt = system_prompt[0]["content"]
             prompt_text = (
-                f"{B_INST} {B_SYS}{system_prompt}{E_SYS}{user_message} {E_INST}"
+                f"<s>{B_INST} {B_SYS}{system_prompt}{E_SYS} {user_message} {E_INST}"
             )
         else:
-            prompt_text = f"{B_INST} {user_message} {E_INST}"
+            prompt_text = f"<s>{B_INST} {user_message} {E_INST}"
         return prompt_text
 
     def process_generation_kwargs(self, **generation_kwargs):
