@@ -325,6 +325,9 @@ def compute_metric(
     sources=None,
     progress=None,
     verbose=False,
+    sample_level=True,
+    parallelized=None,
+    metric_name=None,
     **metric_kwargs,
 ):
     def _compute_metric(references, predictions, sources, progress=None):
@@ -333,25 +336,38 @@ def compute_metric(
         if sources is None:
             sources = [None]
 
-        results = []
-        for idx, (ref, pred, source) in enumerate(
-            zip_longest(references, predictions, sources)
-        ):
-            result = metric_fn(
-                pred, reference=ref, source=source, index=idx, **metric_kwargs
-            )
-            results.append(result)
-            if progress:
-                progress.update(task, advance=1)
+        if sample_level:
+            results = []
+            for idx, (ref, pred, source) in enumerate(
+                zip_longest(references, predictions, sources)
+            ):
+                result = metric_fn(
+                    pred,
+                    reference=ref,
+                    source=source,
+                    index=idx,
+                    parallelized=parallelized,
+                    **metric_kwargs,
+                )
+                results.append(result)
+                if progress:
+                    progress.update(task, advance=1)
+        else:
+            results = metric_fn(
+                predictions=predictions, references=references, **metric_kwargs
+            )     
         return results
 
     if verbose:
         if progress is None:
             progress = get_progress_bar()
 
+        if metric_name is None:
+            metric_name = metric_fn.__name__
+
         task = add_progress_task(
             progress,
-            f"Computing {metric_fn.__name__}...",
+            f"Computing {metric_name}...",
             total=len(predictions),
             existing_ok=False,
         )
@@ -392,6 +408,7 @@ def compute_metrics(
             references=references,
             verbose=verbose,
             parallelized=parallelized,
+            metric_name=metric_name,
             **metric_kwargs,
         )
 

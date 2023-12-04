@@ -14,7 +14,8 @@ def summarization_metrics(
     )
 
     if source is not None:
-        metrics["prediction_abstractiveness"] = abstractiveness(source, prediction)
+        if prediction is not None:
+            metrics["prediction_abstractiveness"] = abstractiveness(source, prediction)
         if reference is not None:
             metrics["reference_abstractiveness"] = abstractiveness(source, reference)
 
