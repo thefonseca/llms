@@ -201,6 +201,10 @@ class HFModel(BaseLM):
         tokenizer = self.load_tokenizer()
         generation_config = self.load_generation_config()
 
+        if do_sample:
+            generation_kwargs["temperature"] = temperature
+            generation_kwargs["top_p"] = top_p
+
         with torch.no_grad():
             if isinstance(model_input, str):
                 input_ids = tokenizer(model_input, return_tensors="pt").input_ids
@@ -218,8 +222,6 @@ class HFModel(BaseLM):
                 input_ids,
                 generation_config,
                 do_sample=do_sample,
-                temperature=temperature,
-                top_p=top_p,
                 **generation_kwargs,
             )
             output = tokenizer.batch_decode(
