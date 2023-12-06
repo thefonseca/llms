@@ -1,9 +1,7 @@
 import logging
 from pprint import pformat
 
-import numpy as np
-
-from ..utils.utils import sent_tokenize, get_progress_bar, add_progress_task, log
+from ..utils.utils import sent_tokenize, log
 
 logger = logging.getLogger(__name__)
 
@@ -213,6 +211,8 @@ class PromptBasedLM(BaseLM):
         if user_prompt is None:
             user_prompt = self.user_prompt
 
+        if budget:
+            budget = int(budget)
         # a naive way of converting unit to singular...
         if budget == 1 and budget_unit[-1].lower() == "s":
             budget_unit = budget_unit[:-1]
@@ -266,7 +266,7 @@ class PromptBasedLM(BaseLM):
             num_tokens += len(tokenizer.encode(message["content"]))
         return num_tokens
 
-    def token_statistics_for_input(self, input_data, truncation, **generation_kwargs):
+    def token_statistics(self, input_data, truncation, **generation_kwargs):
         prompt, truncated_tokens, _ = self.preprocess(
             input_data, truncation=truncation, **generation_kwargs
         )
@@ -275,41 +275,6 @@ class PromptBasedLM(BaseLM):
             prompt = self.prompt_to_text(prompt)
         num_tokens = len(tokenizer.encode(prompt))
         return num_tokens, truncated_tokens
-
-    def token_statistics(
-        self,
-        inputs,
-        truncation=True,
-        show_progress=True,
-        **generation_kwargs,
-    ):
-        progress = get_progress_bar()
-        task = add_progress_task(
-            progress,
-            f"Calculating token statistics for {self.model_name}...",
-            total=len(inputs),
-            existing_ok=False,
-        )
-        progress.update(task, visible=show_progress)
-        truncated_tokens = []
-        num_tokens = []
-
-        with progress:
-            for input_data in inputs:
-                result = self.token_statistics_for_input(
-                    input_data, truncation, **generation_kwargs
-                )
-                num_tokens.append(result[0])
-                truncated_tokens.append(result[1])
-                progress.update(task, advance=1)
-
-        stats = dict(
-            total_tokens=sum(num_tokens),
-            mean_tokens=np.mean(num_tokens),
-            total_truncation=sum(truncated_tokens),
-            mean_truncation=np.mean(truncated_tokens),
-        )
-        return stats
 
     def prompt_to_text(self, prompt):
         return "\n".join([m["content"] for m in prompt])

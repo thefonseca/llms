@@ -76,6 +76,49 @@ def _aggregate_scores(p_scores, scores):
     return all_scores, agg_scores
 
 
+def _preprocess_kwargs(kwargs, sample_idxs=None, max_samples=None):
+    kwargs_ = dict(kwargs)
+
+    for key, arg_val in kwargs.items():
+        if (
+            key.endswith("_path")
+            and isinstance(arg_val, str)
+            and Path(arg_val).exists()
+        ):
+            arg_key = key.replace("_path", "")
+            arg_path = Path(arg_val)
+            values = None
+            if arg_path.suffix == ".txt":
+                with open(arg_val) as fh:
+                    values = fh.readlines()
+            elif arg_path.suffix == ".json":
+                values = pd.read_json(arg_val, header=None)
+                values = values.iloc[:,0].values.tolist()
+            elif arg_path.suffix == ".csv":
+                values = pd.read_csv(arg_val, header=None)
+                values = values.iloc[:,0].values.tolist()
+                
+            if values is not None:
+                if sample_idxs and len(sample_idxs) < len(values):
+                    logger.info(
+                        f"Selecting {len(sample_idxs)} values for argment {arg_key}"
+                    )
+                    values = [values[idx] for idx in sample_idxs]
+
+                kwargs_[arg_key] = values[:max_samples]
+                kwargs_.pop(key)
+                logger.info(
+                    f"Loaded {len(values)} '{arg_key}' values from {arg_val}"
+                )
+
+        elif key.endswith("_path"):
+            logger.warning(
+                f"Could not load argment values. File does not exist: {arg_val}"
+            )
+
+    return kwargs_
+
+
 def eval_job(
     prediction,
     target,
@@ -256,6 +299,7 @@ def evaluate_model(
             sources, targets, max_samples=max_samples, logger=logger
         )
 
+    idxs = None
     if shuffle:
         seed = kwargs.get("seed")
         logger.info(f"Shuffling data using seed: {seed}")
@@ -265,6 +309,8 @@ def evaluate_model(
         sources = [sources[idx] for idx in idxs]
         if targets is not None:
             targets = [targets[idx] for idx in idxs]
+
+    kwargs = _preprocess_kwargs(kwargs, sample_idxs=idxs, max_samples=max_samples)
 
     if sources is not None:
         sources = sources[:max_samples]

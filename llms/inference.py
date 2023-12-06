@@ -3,6 +3,8 @@ from pprint import pformat
 import re
 import time
 
+import numpy as np
+
 from .models.huggingface import (
     Text2TextLM,
     CausalLM,
@@ -68,6 +70,55 @@ def get_model_class(model_name, model_map=None, default_class=None):
     return summarizer_class
 
 
+def get_sample_gen_kwargs(kwargs, sample_idx):
+    sample_kwargs = {}
+    for arg_name, arg_val in kwargs.items():
+        if arg_val is not None and callable(arg_val):
+            sample_kwargs[arg_name] = arg_val(sample_idx)
+        elif arg_val is not None and isinstance(arg_val, list):
+            sample_kwargs[arg_name] = arg_val[sample_idx]
+        else:
+            sample_kwargs[arg_name] = arg_val
+    return sample_kwargs
+
+
+def token_statistics(
+        model,
+        inputs,
+        truncation=True,
+        show_progress=True,
+        **generation_kwargs,
+    ):
+        progress = get_progress_bar()
+        task = add_progress_task(
+            progress,
+            f"Calculating token statistics for {model.model_name}...",
+            total=len(inputs),
+            existing_ok=False,
+        )
+        progress.update(task, visible=show_progress)
+        truncated_tokens = []
+        num_tokens = []
+
+        with progress:
+            for idx, input_data in enumerate(inputs):
+                sample_kwargs = get_sample_gen_kwargs(generation_kwargs, idx)
+                result = model.token_statistics(
+                    input_data, truncation, **sample_kwargs
+                )
+                num_tokens.append(result[0])
+                truncated_tokens.append(result[1])
+                progress.update(task, advance=1)
+
+        stats = dict(
+            total_tokens=sum(num_tokens),
+            mean_tokens=np.mean(num_tokens),
+            total_truncation=sum(truncated_tokens),
+            mean_truncation=np.mean(truncated_tokens),
+        )
+        return stats
+
+
 def generate(
     model_name,
     sources,
@@ -105,7 +156,8 @@ def generate(
         MODEL_CACHE[model_name] = model
 
     if hasattr(model, "token_statistics"):
-        stats = model.token_statistics(
+        stats = token_statistics(
+            model,
             sources,
             max_length=max_length,
             show_progress=show_progress,
@@ -115,6 +167,7 @@ def generate(
 
     with progress:
         for idx, text in enumerate(sources):
+            sample_kwargs = get_sample_gen_kwargs(generation_kwargs, idx)
             ignore_cache = idx < cache_start or idx >= cache_end
             try:
                 output = model.generate(
@@ -122,7 +175,7 @@ def generate(
                     max_length=max_length,
                     memoizer_ignore_cache=ignore_cache,
                     verbose=idx == 0,
-                    **generation_kwargs,
+                    **sample_kwargs,
                 )
             except Exception as err:
                 logger.error(f"Generation failed for sample {idx}")
