@@ -1,8 +1,10 @@
 import logging
+import os
 from pprint import pformat
 import re
 import time
 
+import fire
 import numpy as np
 
 from .models.huggingface import (
@@ -24,8 +26,9 @@ MODEL_CACHE = {}
 DEFAULT_MODEL_MAP = {
     "gpt-[-\d\w]*": OpenAIChat,
     "facebook/opt-[\d\w]+": CausalLM,
+    ".*[cC]ode[Ll]lama-[\d\w]+-[Ii]nstruct-hf": LlamaChat,
     ".*llama-?2.*chat.*": LlamaChat,
-    ".*llama.*": CausalLM,
+    ".*[Ll]lama.*": CausalLM,
     "bigscience/T0[_\d\w]*": InstructText2TextLM,
     "google/flan-t5[-\d\w]+": InstructText2TextLM,
     "google/long-t5[-\d\w]+": InstructText2TextLM,
@@ -121,7 +124,7 @@ def token_statistics(
 
 def generate(
     model_name,
-    sources,
+    sources=None,
     model_class=None,
     max_length=256,
     cache_start=0,
@@ -133,6 +136,10 @@ def generate(
 ):
     outputs = []
     progress = get_progress_bar()
+    if sources is None:
+        sources = [None]
+        show_progress = False
+
     task = add_progress_task(
         progress,
         f"Generating outputs for {model_name}...",
@@ -197,3 +204,8 @@ def generate(
                 time.sleep(model.request_interval)
 
     return outputs
+
+
+if __name__ == "__main__":
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+    fire.Fire(generate)

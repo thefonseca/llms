@@ -241,7 +241,7 @@ class PromptBasedLM(BaseLM):
             prompt.append({"role": "user", "content": context_prompt})
             self._context_prompt = context_prompt
 
-        if input_prompt:
+        if input_prompt and input_data:
             input_prompt = input_prompt.format(**prompt_args)
             prompt.append({"role": "input", "content": input_prompt})
             self._input_prompt = input_prompt
