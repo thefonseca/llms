@@ -97,7 +97,7 @@ def _preprocess_kwargs(kwargs, sample_idxs=None, max_samples=None):
             elif arg_path.suffix == ".csv":
                 values = pd.read_csv(arg_val, header=None)
                 values = values.iloc[:,0].values.tolist()
-                
+
             if values is not None:
                 if sample_idxs and len(sample_idxs) < len(values):
                     logger.info(
@@ -151,6 +151,7 @@ def evaluate(
     save_to=None,
     n_samples=None,
     parallelize=False,
+    save_sources=False,
     seed=17,
 ):
     # this seed is for confidence interval estimation via bootstrapping
@@ -207,6 +208,8 @@ def evaluate(
         preds_dict = {"prediction": preds}
         if targets is not None:
             preds_dict["reference"] = targets
+        if save_sources and sources is not None:
+            preds_dict["source"] = sources
         preds_df = pd.DataFrame(preds_dict)
         preds_filename = f"{filepath.stem}_predictions.csv"
         preds_filename = filepath.parent / preds_filename
@@ -240,6 +243,7 @@ def evaluate_model(
     run_id=None,
     timestr=None,
     parallelize=False,
+    save_sources=False,
     **kwargs,
 ):
     if arxiv_id or arxiv_query:
@@ -368,6 +372,8 @@ def evaluate_model(
             predictions = [predictions[idx] for idx in valid_pred_idxs]
             if targets is not None:
                 targets = [targets[idx] for idx in valid_pred_idxs]
+            if sources is not None:
+                sources = [sources[idx] for idx in valid_pred_idxs]
 
         save_to = get_output_path(
             output_dir,
@@ -388,6 +394,7 @@ def evaluate_model(
             targets=targets,
             save_to=save_to,
             parallelize=parallelize,
+            save_sources=save_sources,
             **_kwargs,
         )
         result = dict(
