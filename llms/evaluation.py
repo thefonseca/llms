@@ -93,10 +93,10 @@ def _preprocess_kwargs(kwargs, sample_idxs=None, max_samples=None):
                     values = fh.readlines()
             elif arg_path.suffix == ".json":
                 values = pd.read_json(arg_val, header=None)
-                values = values.iloc[:,0].values.tolist()
+                values = values.iloc[:, 0].values.tolist()
             elif arg_path.suffix == ".csv":
                 values = pd.read_csv(arg_val, header=None)
-                values = values.iloc[:,0].values.tolist()
+                values = values.iloc[:, 0].values.tolist()
 
             if values is not None:
                 if sample_idxs and len(sample_idxs) < len(values):
@@ -107,9 +107,7 @@ def _preprocess_kwargs(kwargs, sample_idxs=None, max_samples=None):
 
                 kwargs_[arg_key] = values[:max_samples]
                 kwargs_.pop(key)
-                logger.info(
-                    f"Loaded {len(values)} '{arg_key}' values from {arg_val}"
-                )
+                logger.info(f"Loaded {len(values)} '{arg_key}' values from {arg_val}")
 
         elif key.endswith("_path"):
             logger.warning(
@@ -125,6 +123,7 @@ def eval_job(
     source,
     doc_id,
     metrics,
+    **kwargs,
 ):
     try:
         if target is not None and str(target) == "nan" and len(target) == 0:
@@ -138,6 +137,7 @@ def eval_job(
         sources=[source],
         references=[target],
         parallelized=True,
+        **kwargs,
     )
     return scores
 
@@ -153,6 +153,7 @@ def evaluate(
     parallelize=False,
     save_sources=False,
     seed=17,
+    **kwargs,
 ):
     # this seed is for confidence interval estimation via bootstrapping
     np.random.seed(seed)
@@ -183,6 +184,7 @@ def evaluate(
         references=targets,
         parallelized=False,
         verbose=True,
+        **kwargs,
     )
 
     parallel_scores = []
@@ -191,7 +193,7 @@ def evaluate(
         _targets = [None] * len(preds) if targets is None else targets[:n_samples]
         parallel_scores = p_map(
             lambda pred, target, source, doc_id: eval_job(
-                pred, target, source, doc_id, parallel_metrics
+                pred, target, source, doc_id, parallel_metrics, **kwargs
             ),
             preds,
             _targets,
@@ -384,9 +386,6 @@ def evaluate_model(
             timestr=timestr,
             run_id=run_id,
         )
-        _kwargs = {}
-        if "seed" in kwargs:
-            _kwargs["seed"] = kwargs.get("seed")
         scores, agg_scores = evaluate(
             predictions,
             metrics,
@@ -395,7 +394,7 @@ def evaluate_model(
             save_to=save_to,
             parallelize=parallelize,
             save_sources=save_sources,
-            **_kwargs,
+            **kwargs,
         )
         result = dict(
             predictions=predictions,

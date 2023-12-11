@@ -293,7 +293,7 @@ def rouge_score(prediction, reference, rouge_ngrams=None):
 
 
 def generation_metrics(
-    prediction, reference=None, source=None, index=None, parallelized=False
+    prediction, reference=None, source=None, budget=None, index=None, parallelized=False
 ):
     metrics = {}
     if source is not None:
@@ -301,17 +301,21 @@ def generation_metrics(
 
     metrics["prediction_stats"] = text_statistics(str(prediction))
 
+    if budget and "sentences_per_sample" in metrics["prediction_stats"]:
+        n_sents = metrics["prediction_stats"]["sentences_per_sample"]
+        metrics["budget_guidance_diff"] = abs(n_sents - budget)
+
     if reference is not None:
         if str(reference) == "nan":
             reference = "None"
 
         if isinstance(reference, str):
             metrics["reference_stats"] = text_statistics(reference)
-            metrics["length_diff"] = {}
+            metrics["length_diff_prediction_vs_reference"] = {}
             for x in ["sentences", "tokens"]:
                 prediction_val = metrics["prediction_stats"][f"{x}_per_sample"]
                 reference_val = metrics["reference_stats"][f"{x}_per_sample"]
-                metrics["length_diff"][f"{x}_diff"] = abs(
+                metrics["length_diff_prediction_vs_reference"][f"{x}_diff"] = abs(
                     reference_val - prediction_val
                 )
 
@@ -355,7 +359,7 @@ def compute_metric(
         else:
             results = metric_fn(
                 predictions=predictions, references=references, **metric_kwargs
-            )     
+            )
         return results
 
     if verbose:
@@ -388,6 +392,7 @@ def compute_metrics(
     references=None,
     parallelized=None,
     verbose=False,
+    **kwargs,
 ):
     scores = {}
     if metrics and not isinstance(metrics, list):
@@ -398,7 +403,8 @@ def compute_metrics(
             metric = {"metric_fn": metric, "metric_name": metric.__name__}
 
         metric_name = metric.get("metric_name")
-        metric_kwargs = metric.get("metric_kwargs", {})
+        metric_kwargs = dict(metric.get("metric_kwargs", {}))
+        metric_kwargs.update(kwargs)
         if sources is not None and metric.get("include_sources", True):
             metric_kwargs["sources"] = sources
 
@@ -411,7 +417,6 @@ def compute_metrics(
             metric_name=metric_name,
             **metric_kwargs,
         )
-
         scores[metric_name] = metric_scores
 
     return scores

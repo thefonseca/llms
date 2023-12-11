@@ -46,7 +46,7 @@ MODEL_MAP = {
 
 
 def classification_metrics(
-    prediction, reference=None, source=None, parallelized=False, index=None
+    prediction, reference=None, source=None, parallelized=False, index=None, **kwargs
 ):
     metrics = generation_metrics(
         prediction, reference=reference, source=source, parallelized=parallelized

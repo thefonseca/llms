@@ -1,3 +1,4 @@
+from ..inference import get_sample_gen_kwargs
 from ..metrics import generation_metrics, rouge_score, abstractiveness
 
 
@@ -5,12 +6,22 @@ def summarization_metrics(
     prediction,
     reference=None,
     source=None,
+    budget=None,
     rouge_ngrams=None,
     parallelized=False,
     index=None,
+    **kwargs,
 ):
+    if budget:
+        kwargs_ = dict(budget=budget)
+        budget = get_sample_gen_kwargs(kwargs_, index)["budget"]
+
     metrics = generation_metrics(
-        prediction, reference=reference, source=source, parallelized=parallelized
+        prediction,
+        reference=reference,
+        source=source,
+        budget=budget,
+        parallelized=parallelized,
     )
 
     if source is not None:
