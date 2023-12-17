@@ -7,6 +7,7 @@ from nltk import ngrams
 import numpy as np
 import pandas as pd
 from rouge_score import rouge_scorer, scoring
+from rouge_score.tokenizers import DefaultTokenizer
 from scipy.stats import bootstrap
 import textstat
 
@@ -238,9 +239,13 @@ def abstractiveness(source, prediction):
     if isinstance(prediction, list):
         prediction = "\n".join(prediction)
 
+    tokenizer = DefaultTokenizer(use_stemmer=True)
+    source_tokens = tokenizer.tokenize(source)
+    prediction_tokens = tokenizer.tokenize(prediction)
+
     for n in range(1, 5):
-        source_ngrams = list(ngrams(source.split(" "), n))
-        prediction_ngrams = list(ngrams(prediction.split(" "), n))
+        source_ngrams = list(ngrams(source_tokens, n))
+        prediction_ngrams = list(ngrams(prediction_tokens, n))
         novel_ngrams = [x for x in prediction_ngrams if x not in source_ngrams]
         if len(prediction_ngrams):
             result[f"{n}_gram"] = len(novel_ngrams) / len(prediction_ngrams)
