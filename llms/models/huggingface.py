@@ -181,6 +181,7 @@ class HFModel(BaseLM):
         do_sample=True,
         temperature=0.8,
         top_p=0.95,
+        force_words=None,
         seed=42,
         keep_generated_only=False,
         input_length_adjust=0,
@@ -205,6 +206,20 @@ class HFModel(BaseLM):
             generation_kwargs["temperature"] = temperature
             generation_kwargs["top_p"] = top_p
 
+        force_words_ids = generation_kwargs.pop('force_word_ids', None)
+        if force_words and force_words_ids is None:
+            if isinstance(force_words, str):
+                force_words = [[force_words]]
+            
+            # by default, assume a conjunctive constraint
+            if isinstance(force_words[0], str):
+                force_words = [[word] for word in force_words]
+
+            force_words_ids = []
+            for word_list in force_words:
+                word_ids = tokenizer(word_list, add_special_tokens=False).input_ids
+                force_words_ids.append(word_ids)
+
         with torch.no_grad():
             if isinstance(model_input, str):
                 input_ids = tokenizer(model_input, return_tensors="pt").input_ids
@@ -222,6 +237,7 @@ class HFModel(BaseLM):
                 input_ids,
                 generation_config,
                 do_sample=do_sample,
+                force_words_ids=force_words_ids,
                 **generation_kwargs,
             )
             output = tokenizer.batch_decode(
