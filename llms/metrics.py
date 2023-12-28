@@ -110,9 +110,7 @@ def get_metric_info(scores, key=None, info=None):
         elif all([k in scores.keys() for k in ["low", "mean", "high"]]):
             _score = []
             for confidence_key in ["low", "mean", "high"]:
-                if isinstance(scores[confidence_key], np.ndarray) or isinstance(
-                    scores[confidence_key], list
-                ):
+                if isinstance(scores[confidence_key], (np.ndarray, list)):
                     score = [f"{x:.3f}" for x in scores[confidence_key]]
                     score = f"\n  {confidence_key}: {str(score)}"
                 else:
@@ -130,6 +128,8 @@ def get_metric_info(scores, key=None, info=None):
             for key_, score in scores.items():
                 get_metric_info(score, key=key_, info=info)
 
+    elif isinstance(scores, (np.ndarray, list)):
+        _score = [f"{x:.3f}" for x in scores]
     else:
         _score = f"{scores:.3f}"
 
@@ -156,7 +156,14 @@ def get_confidence_interval(scores):
     scores = _scores
     confidence_interval = {}
 
-    if len(scores) > 1:
+    def is_constant(a): # avoid DegenerateDataWarning
+        a = np.array(a)
+        return (np.isclose(a, a[0]) | np.isnan(a)).all()
+
+    if is_constant(scores):
+        confidence_interval["mean"] = scores[0]
+
+    elif len(scores) > 1:
         ci = bootstrap(
             (scores,),
             np.mean,
