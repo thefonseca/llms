@@ -308,7 +308,7 @@ def generation_metrics(
 
     if budget and "sentences_per_sample" in metrics["prediction_stats"]:
         n_sents = metrics["prediction_stats"]["sentences_per_sample"]
-        metrics["budget_guidance_diff"] = abs(n_sents - budget)
+        metrics["prediction_budget_guidance_diff"] = abs(n_sents - budget)
 
     if reference is not None:
         if str(reference) == "nan":
@@ -316,6 +316,10 @@ def generation_metrics(
 
         if isinstance(reference, str):
             metrics["reference_stats"] = text_statistics(reference)
+            if budget and "sentences_per_sample" in metrics["reference_stats"]:
+                n_sents = metrics["reference_stats"]["sentences_per_sample"]
+                metrics["reference_budget_guidance_diff"] = abs(n_sents - budget)
+            
             metrics["length_diff_prediction_vs_reference"] = {}
             for x in ["sentences", "tokens"]:
                 prediction_val = metrics["prediction_stats"][f"{x}_per_sample"]

@@ -166,6 +166,7 @@ def config_logging(
     logging.basicConfig(
         level=os.environ.get("LOG_LEVEL", "INFO"),
         handlers=handlers,
+        force=True,
     )
     logging.getLogger("absl").setLevel(logging.WARNING)
     return timestr

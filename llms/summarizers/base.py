@@ -10,7 +10,7 @@ class PromptBasedSummarizer(PromptBasedLM):
         super().__init__(model_name, **kwargs)
 
     def default_user_prompt(self):
-        return "\nTL;DR:"
+        return "TL;DR:"
 
 
 class InstructTunedSummarizer(PromptBasedLM):
@@ -19,5 +19,5 @@ class InstructTunedSummarizer(PromptBasedLM):
 
     def default_user_prompt(self):
         return (
-            "\nWrite a summary of the article above in {budget} {budget_unit}."
+            "Write a summary of the article above in {budget} {budget_unit}."
         )

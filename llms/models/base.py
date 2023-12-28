@@ -135,16 +135,16 @@ class PromptBasedLM(BaseLM):
 
     def default_system_prompt(self):
         return None
-    
+
     def default_context_prompt(self):
         return None
 
     def default_input_prompt(self):
         return "{input}"
-    
+
     def default_user_prompt(self):
         return None
-    
+
     def get_prompt_args(self):
         return {}
 
@@ -166,7 +166,7 @@ class PromptBasedLM(BaseLM):
         # discount maximum output length from max_tokens
         num_tokens = self.num_tokens_for_prompt(prompt)
         excess_tokens = num_tokens - max_tokens
-        
+
         # find input data prompt (the one to be truncated)
         input_idx = -1
         for idx, item in enumerate(prompt):
@@ -223,6 +223,15 @@ class PromptBasedLM(BaseLM):
             **generation_kwargs,
         )
         prompt_args = dict(prompt_args, **self.get_prompt_args())
+        def remove_prefix(x):
+            if x.startswith("prompt_"):
+                x = x.replace("prompt_", "")
+            return x
+        prompt_args = {remove_prefix(k):v for k,v in prompt_args.items()}
+        # Convention: arguments starting with "prompt_" are using only in prompts 
+        generation_kwargs = {
+            k: v for k, v in generation_kwargs.items() if not k.startswith("prompt_")
+        }
 
         if isinstance(input_data, dict):
             prompt_args = dict(prompt_args, **input_data)
@@ -231,23 +240,29 @@ class PromptBasedLM(BaseLM):
 
         prompt = []
 
+        def get_prompt(p, **kwargs):
+            if callable(p):
+                return p(**kwargs)
+            else:
+                return p.format(**kwargs)
+
         if system_prompt:
-            system_prompt = system_prompt.format(**prompt_args)
+            system_prompt = get_prompt(system_prompt, **prompt_args)
             prompt.append({"role": "system", "content": system_prompt})
             self._system_prompt = system_prompt
 
         if context_prompt:
-            context_prompt = context_prompt.format(**prompt_args)
+            context_prompt = get_prompt(context_prompt, **prompt_args)
             prompt.append({"role": "user", "content": context_prompt})
             self._context_prompt = context_prompt
 
         if input_prompt and input_data:
-            input_prompt = input_prompt.format(**prompt_args)
+            input_prompt = get_prompt(input_prompt, **prompt_args)
             prompt.append({"role": "input", "content": input_prompt})
             self._input_prompt = input_prompt
 
         if user_prompt:
-            user_prompt = user_prompt.format(**prompt_args)
+            user_prompt = get_prompt(user_prompt, **prompt_args)
             prompt.append({"role": "user", "content": user_prompt})
             self._user_prompt = user_prompt
 
