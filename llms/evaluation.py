@@ -13,6 +13,7 @@ from .inference import generate
 from .metrics import (
     aggregate_metrics,
     compute_metrics,
+    is_valid_prediction,
     log_metrics,
     save_scores,
     generation_metrics,
@@ -125,11 +126,9 @@ def eval_job(
     metrics,
     **kwargs,
 ):
-    try:
-        if target is not None and str(target) == "nan" and len(target) == 0:
-            return
-    except:
-        logger.error(f"Invalid target: {target}")
+    if not is_valid_prediction(prediction):
+        logger.error(f"Invalid prediction: {prediction}")
+        return
 
     scores = compute_metrics(
         metrics,
@@ -201,6 +200,20 @@ def evaluate(
             doc_ids,
         )
 
+    # We need to filter out invalid predictions *after* metric calculation because some 
+    # of the arguments used in the metrics are based on the original index. This should  
+    # be refactored in the future.
+    valid_pred_idxs = [idx for idx, pred in enumerate(preds) if is_valid_prediction(pred)]
+    if len(valid_pred_idxs) < len(preds):
+        logger.warning(
+            f"Found {len(preds) - len(valid_pred_idxs)} predictions with no content"
+        )
+        preds = [preds[idx] for idx in valid_pred_idxs]
+        if targets is not None:
+            targets = [targets[idx] for idx in valid_pred_idxs]
+        if sources is not None:
+            sources = [sources[idx] for idx in valid_pred_idxs]
+    
     scores, agg_scores = _aggregate_scores(parallel_scores, scores)
     log_metrics(agg_scores)
 
@@ -360,22 +373,6 @@ def evaluate_model(
                 cache_end=cache_end,
                 **kwargs,
             )
-
-        def is_valid_pred(pred):
-            return pred is not None and str(pred) != "nan"
-
-        valid_pred_idxs = [
-            idx for idx, pred in enumerate(predictions) if is_valid_pred(pred)
-        ]
-        if len(valid_pred_idxs) < len(predictions):
-            logger.warning(
-                f"Found {len(predictions) - len(valid_pred_idxs)} predictions with no content"
-            )
-            predictions = [predictions[idx] for idx in valid_pred_idxs]
-            if targets is not None:
-                targets = [targets[idx] for idx in valid_pred_idxs]
-            if sources is not None:
-                sources = [sources[idx] for idx in valid_pred_idxs]
 
         save_to = get_output_path(
             output_dir,

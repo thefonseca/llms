@@ -57,6 +57,17 @@ def scores_to_df(scores, key=None, scores_df=None):
     return scores_df
 
 
+class CustomEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
+                            np.int16, np.int32, np.int64, np.uint8,
+                            np.uint16, np.uint32, np.uint64)):
+
+            return int(obj)
+        
+        return json.JSONEncoder.default(self, obj)
+
+
 def save_scores(scores_per_sample, agg_scores, save_to):
     filepath = Path(save_to)
     scores_df = scores_to_df(scores_per_sample)
@@ -68,7 +79,7 @@ def save_scores(scores_per_sample, agg_scores, save_to):
     results_filename = f"{filepath.stem}_metrics.json"
     results_filename = filepath.parent / results_filename
     with open(results_filename, "w") as file:
-        json.dump(agg_scores, file, indent=2)
+        json.dump(agg_scores, file, indent=2, cls=CustomEncoder)
 
 
 def get_rouge_info(scores):
@@ -130,9 +141,9 @@ def get_metric_info(scores, key=None, info=None):
 
     elif isinstance(scores, (np.ndarray, list)):
         _score = [f"{x:.3f}" for x in scores]
-    else:
+    elif scores:
         _score = f"{scores:.3f}"
-
+    
     if _score:
         info.append(f"{key}: {_score}")
     return info
@@ -160,8 +171,8 @@ def get_confidence_interval(scores):
         a = np.array(a)
         return (np.isclose(a, a[0]) | np.isnan(a)).all()
 
-    if is_constant(scores):
-        confidence_interval["mean"] = scores[0]
+    if len(scores) and is_constant(scores):
+        confidence_interval = scores[0]
 
     elif len(scores) > 1:
         ci = bootstrap(
@@ -180,6 +191,8 @@ def get_confidence_interval(scores):
         }
     elif len(scores) == 1:
         confidence_interval["mean"] = scores[0]
+    else:
+        confidence_interval = None
 
     return confidence_interval
 
@@ -310,12 +323,13 @@ def generation_metrics(
     metrics = {}
     if source is not None:
         metrics["source_stats"] = text_statistics(source)
-
-    metrics["prediction_stats"] = text_statistics(str(prediction))
+    
+    if prediction is not None:
+        metrics["prediction_stats"] = text_statistics(str(prediction))
 
     if budget and "sentences_per_sample" in metrics["prediction_stats"]:
         n_sents = metrics["prediction_stats"]["sentences_per_sample"]
-        metrics["prediction_budget_guidance_diff"] = abs(n_sents - budget)
+        metrics["prediction_budget_diff"] = abs(n_sents - budget)
 
     if reference is not None:
         if str(reference) == "nan":
@@ -325,17 +339,22 @@ def generation_metrics(
             metrics["reference_stats"] = text_statistics(reference)
             if budget and "sentences_per_sample" in metrics["reference_stats"]:
                 n_sents = metrics["reference_stats"]["sentences_per_sample"]
-                metrics["reference_budget_guidance_diff"] = abs(n_sents - budget)
+                metrics["reference_budget_diff"] = abs(n_sents - budget)
             
-            metrics["length_diff_prediction_vs_reference"] = {}
-            for x in ["sentences", "tokens"]:
-                prediction_val = metrics["prediction_stats"][f"{x}_per_sample"]
-                reference_val = metrics["reference_stats"][f"{x}_per_sample"]
-                metrics["length_diff_prediction_vs_reference"][f"{x}_diff"] = abs(
-                    reference_val - prediction_val
-                )
+            if prediction is not None:
+                metrics["length_diff_prediction_vs_reference"] = {}
+                for x in ["sentences", "tokens"]:
+                    prediction_val = metrics["prediction_stats"][f"{x}_per_sample"]
+                    reference_val = metrics["reference_stats"][f"{x}_per_sample"]
+                    metrics["length_diff_prediction_vs_reference"][f"{x}_diff"] = abs(
+                        reference_val - prediction_val
+                    )
 
     return metrics
+
+
+def is_valid_prediction(pred):
+    return pred is not None and str(pred) != "nan"
 
 
 def compute_metric(
@@ -361,15 +380,17 @@ def compute_metric(
             for idx, (ref, pred, source) in enumerate(
                 zip_longest(references, predictions, sources)
             ):
-                result = metric_fn(
-                    pred,
-                    reference=ref,
-                    source=source,
-                    index=idx,
-                    parallelized=parallelized,
-                    **metric_kwargs,
-                )
-                results.append(result)
+                if is_valid_prediction(pred):
+                    result = metric_fn(
+                        pred,
+                        reference=ref,
+                        source=source,
+                        index=idx,
+                        parallelized=parallelized,
+                        **metric_kwargs,
+                    )
+                    results.append(result)
+
                 if progress:
                     progress.update(task, advance=1)
         else:
