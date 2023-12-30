@@ -100,16 +100,22 @@ def _preprocess_kwargs(kwargs, sample_idxs=None, max_samples=None):
                 values = values.iloc[:, 0].values.tolist()
 
             if values is not None:
-                if sample_idxs and len(sample_idxs) < len(values):
-                    logger.info(
-                        f"Selecting {len(sample_idxs)} values for argment {arg_key}"
-                    )
+                logger.info(f"Loaded {len(values)} '{arg_key}' values from {arg_val}.")
+                
+                if sample_idxs and len(sample_idxs) == len(values):
                     values = [values[idx] for idx in sample_idxs]
+                    logger.info(
+                        f"Shuffled {len(sample_idxs)} values for argment {arg_key}."
+                    )
+                elif sample_idxs:
+                    logger.warning(
+                        f"Sample indexes are inconsistent with list of arguments '{arg_key}'!"
+                        f" Make sure the list matches the order of evaluation samples *after* shuffling."
+                    )
 
                 kwargs_[arg_key] = values[:max_samples]
                 kwargs_.pop(key)
-                logger.info(f"Loaded {len(values)} '{arg_key}' values from {arg_val}")
-
+                
         elif key.endswith("_path"):
             logger.warning(
                 f"Could not load argment values. File does not exist: {arg_val}"
@@ -182,9 +188,14 @@ def _load_predictions(path, key, sources, targets, sample_idxs=None, max_samples
     prediction_data = pd.read_csv(path)
     predictions = prediction_data[key].values
 
-    if sample_idxs and len(sample_idxs) < len(predictions):
-        logger.info(f"Selecting {len(sample_idxs)}/{len(predictions)} '{key}' values")
+    if sample_idxs and len(sample_idxs) == len(predictions):
         predictions = [predictions[idx] for idx in sample_idxs]
+        logger.info(f"Shuffled {len(sample_idxs)} '{key}' values")
+    elif sample_idxs:
+        logger.warning(
+            f"Sample indexes are inconsistent with list of predictiond '{key}'!"
+            f" Make sure the list matches the order of evaluation samples *after* shuffling."
+        )
 
     predictions = predictions[:max_samples]
 
@@ -392,7 +403,7 @@ def evaluate_model(
         np.random.seed(seed)
         sample_idxs = list(range(len(sources)))
         np.random.shuffle(sample_idxs)
-        sample_idxs = sample_idxs[:max_samples]
+        sample_idxs = sample_idxs
         sources = [sources[idx] for idx in sample_idxs]
         if targets is not None:
             targets = [targets[idx] for idx in sample_idxs]
