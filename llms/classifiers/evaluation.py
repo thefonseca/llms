@@ -84,6 +84,10 @@ def evaluate_classifier(model_name=None, metrics=None, **kwargs):
     return result
 
 
+def run(**kwargs):
+    evaluate_classifier(**kwargs)
+
+
 if __name__ == "__main__":
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    fire.Fire(evaluate_classifier)
+    fire.Fire(run)

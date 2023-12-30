@@ -118,6 +118,89 @@ def _preprocess_kwargs(kwargs, sample_idxs=None, max_samples=None):
     return kwargs_
 
 
+def _load_eval_data(
+    source_key,
+    target_key,
+    dataset_name=None,
+    dataset_config=None,
+    split=None,
+    source_file=None,
+    arxiv_id=None,
+    arxiv_query=None,
+    max_samples=None,
+    output_dir=None,
+    timestr=None,
+    run_id=None,
+    data_cache_dir=None,
+):
+    if arxiv_id or arxiv_query:
+        papers = load_arxiv_data(arxiv_id, arxiv_query, max_samples)
+        eval_data = {
+            "entry_id": [p["entry_id"] for p in papers],
+            source_key: [p["text"] for p in papers],
+            target_key: [p["summary"] for p in papers],
+        }
+        dataset_config = arxiv_id if arxiv_id else arxiv_query
+        save_to = get_output_path(
+            output_dir,
+            "arxiv_api",
+            dataset_config,
+            timestr=timestr,
+            run_id=run_id,
+        )
+        if save_to:
+            arxiv_data_path = os.path.join(save_to, "arxiv-data.json")
+            pd.DataFrame(eval_data).to_json(arxiv_data_path)
+        logger.info(f"Loaded {len(eval_data)} samples from arXiv API: {dataset_config}")
+    elif source_file and Path(source_file).suffix == ".pdf":
+        text = pdf_to_text(source_file)
+        eval_data = {source_key: [text], target_key: []}
+        logger.info(f"Loaded PDF from {source_file}")
+    elif source_file and Path(source_file).suffix == ".txt":
+        with open(source_file) as fh:
+            text = fh.readlines()
+        eval_data = {source_key: [text], target_key: []}
+        logger.info(f"Loaded text from {source_file}")
+    elif Path(dataset_name).suffix == ".json":
+        eval_data = pd.read_json(dataset_name)
+        key = eval_data.columns[0]
+        logger.info(f"Loaded {len(eval_data[key])} samples from {dataset_name}")
+    elif Path(dataset_name).suffix == ".csv":
+        eval_data = pd.read_csv(dataset_name)
+        key = eval_data.columns[0]
+        logger.info(f"Loaded {len(eval_data[key])} samples from {dataset_name}")
+    else:
+        eval_data = datasets.load_dataset(
+            dataset_name, dataset_config, cache_dir=data_cache_dir
+        )
+        logger.info(f"Loaded {len(eval_data[split])} {split} samples from {dataset_name}/{dataset_config}")
+        eval_data = eval_data[split]
+    return eval_data
+
+
+def _load_predictions(path, key, sources, targets, sample_idxs=None, max_samples=None):
+    prediction_data = pd.read_csv(path)
+    predictions = prediction_data[key].values
+
+    if sample_idxs and len(sample_idxs) < len(predictions):
+        logger.info(f"Selecting {len(sample_idxs)}/{len(predictions)} '{key}' values")
+        predictions = [predictions[idx] for idx in sample_idxs]
+
+    predictions = predictions[:max_samples]
+
+    if sources is not None and len(predictions) != len(sources):
+        raise ValueError(
+            f"Number of predictions from {path} ({len(predictions)}) "
+            f"is incompatible with number of source documents ({len(sources)})."
+        )
+    elif targets is not None and len(predictions) != len(targets):
+        raise ValueError(
+            f"Number of predictions from {path} ({len(predictions)}) "
+            f"is incompatible with number of targets ({len(targets)})."
+        )
+    return predictions
+
+
 def eval_job(
     prediction,
     target,
@@ -200,10 +283,12 @@ def evaluate(
             doc_ids,
         )
 
-    # We need to filter out invalid predictions *after* metric calculation because some 
-    # of the arguments used in the metrics are based on the original index. This should  
+    # We need to filter out invalid predictions *after* metric calculation because some
+    # of the arguments used in the metrics are based on the original index. This should
     # be refactored in the future.
-    valid_pred_idxs = [idx for idx, pred in enumerate(preds) if is_valid_prediction(pred)]
+    valid_pred_idxs = [
+        idx for idx, pred in enumerate(preds) if is_valid_prediction(pred)
+    ]
     if len(valid_pred_idxs) < len(preds):
         logger.warning(
             f"Found {len(preds) - len(valid_pred_idxs)} predictions with no content"
@@ -213,7 +298,7 @@ def evaluate(
             targets = [targets[idx] for idx in valid_pred_idxs]
         if sources is not None:
             sources = [sources[idx] for idx in valid_pred_idxs]
-    
+
     scores, agg_scores = _aggregate_scores(parallel_scores, scores)
     log_metrics(agg_scores)
 
@@ -277,39 +362,21 @@ def evaluate_model(
     if model_name is None and prediction_path is None:
         raise ValueError("Please specify one of 'model_name' or 'prediction_path'")
 
-    if arxiv_id or arxiv_query:
-        eval_data = load_arxiv_data(
-            arxiv_id, arxiv_query, max_samples, source_key, target_key
-        )
-        save_to = get_output_path(
-            output_dir,
-            dataset_name,
-            dataset_config,
-            timestr=timestr,
-            run_id=run_id,
-        )
-        if save_to:
-            arxiv_data_path = os.path.join(save_to, "arxiv-data.json")
-            pd.DataFrame(eval_data).to_json(arxiv_data_path)
-    elif source_file and Path(source_file).suffix == ".pdf":
-        text = pdf_to_text(source_file)
-        eval_data = {source_key: [text], target_key: []}
-    elif source_file and Path(source_file).suffix == ".txt":
-        with open(source_file) as fh:
-            text = fh.readlines()
-        eval_data = {source_key: [text], target_key: []}
-    elif Path(dataset_name).suffix == ".json":
-        eval_data = pd.read_json(dataset_name)
-        logger.info(f"Loaded {len(eval_data)} samples from {dataset_name}")
-    elif Path(dataset_name).suffix == ".csv":
-        eval_data = pd.read_csv(dataset_name)
-        logger.info(f"Loaded {len(eval_data)} samples from {dataset_name}")
-    else:
-        eval_data = datasets.load_dataset(
-            dataset_name, dataset_config, cache_dir=data_cache_dir
-        )
-        eval_data = eval_data[split]
-
+    eval_data = _load_eval_data(
+        source_key,
+        target_key,
+        dataset_name=dataset_name,
+        dataset_config=dataset_config,
+        split=split,
+        source_file=source_file,
+        arxiv_id=arxiv_id,
+        arxiv_query=arxiv_query,
+        max_samples=max_samples,
+        output_dir=output_dir,
+        timestr=timestr,
+        run_id=run_id,
+        data_cache_dir=data_cache_dir,
+    )
     sources = _get_samples_for_key(eval_data, source_key)
     targets = _get_samples_for_key(eval_data, target_key) if target_key else None
 
@@ -318,18 +385,21 @@ def evaluate_model(
             sources, targets, max_samples=max_samples, logger=logger
         )
 
-    idxs = None
+    sample_idxs = None
     if shuffle:
         seed = kwargs.get("seed")
         logger.info(f"Shuffling data using seed: {seed}")
         np.random.seed(seed)
-        idxs = list(range(len(sources)))
-        np.random.shuffle(idxs)
-        sources = [sources[idx] for idx in idxs]
+        sample_idxs = list(range(len(sources)))
+        np.random.shuffle(sample_idxs)
+        sample_idxs = sample_idxs[:max_samples]
+        sources = [sources[idx] for idx in sample_idxs]
         if targets is not None:
-            targets = [targets[idx] for idx in idxs]
+            targets = [targets[idx] for idx in sample_idxs]
 
-    kwargs = _preprocess_kwargs(kwargs, sample_idxs=idxs, max_samples=max_samples)
+    kwargs = _preprocess_kwargs(
+        kwargs, sample_idxs=sample_idxs, max_samples=max_samples
+    )
 
     if sources is not None:
         sources = sources[:max_samples]
@@ -350,21 +420,17 @@ def evaluate_model(
     for model_name in model_names:
         if Path(model_name).suffix == ".csv":
             logger.info(f"Loading predictions from {model_name}...")
-            prediction_data = pd.read_csv(model_name)
-            predictions = prediction_data[prediction_key].values[:max_samples]
-            if sources is not None and len(predictions) != len(sources):
-                raise ValueError(
-                    f"Number of predictions from {model_name} ({len(predictions)}) "
-                    f"is incompatible with number of source documents ({len(sources)})."
-                )
-            elif targets is not None and len(predictions) != len(targets):
-                raise ValueError(
-                    f"Number of predictions from {model_name} ({len(predictions)}) "
-                    f"is incompatible with number of targets ({len(targets)})."
-                )
-            logger.info(f"Evaluating {model_name} on {len(predictions)} samples.")
+            predictions = _load_predictions(
+                model_name,
+                prediction_key,
+                sources,
+                targets,
+                sample_idxs=sample_idxs,
+                max_samples=max_samples,
+            )
+            logger.info(f"Evaluating {model_name} on {len(predictions)} samples...")
         else:
-            logger.info(f"Evaluating {model_name} on {len(sources)} samples.")
+            logger.info(f"Evaluating {model_name} on {len(sources)} samples...")
             predictions = generate(
                 model_name,
                 sources,
@@ -403,6 +469,10 @@ def evaluate_model(
         return result
 
 
+def run(**kwargs):
+    evaluate_model(**kwargs)
+
+
 if __name__ == "__main__":
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    fire.Fire(evaluate_model)
+    fire.Fire(run)

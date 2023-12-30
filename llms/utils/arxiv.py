@@ -223,13 +223,8 @@ def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
         sort_by=SortCriterion.SubmittedDate,
         remove_abstract=True,
     )
-    texts = [clean_arxiv_text(p["text"]) for p in papers]
-    valid_idxs = [idx for idx, t in enumerate(texts) if t]
-    texts = [texts[idx] for idx in valid_idxs]
-    papers = [papers[idx] for idx in valid_idxs]
-    eval_data = {
-        "entry_id": [p["entry_id"] for p in papers],
-        source_key: texts,
-        target_key: [p["summary"] for p in papers],
-    }
-    return eval_data
+    
+    for p in papers:
+        p["text"] = clean_arxiv_text(p["text"])
+    papers = [p for p in papers if p["text"]]
+    return papers
