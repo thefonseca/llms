@@ -141,7 +141,7 @@ def get_metric_info(scores, key=None, info=None):
 
     elif isinstance(scores, (np.ndarray, list)):
         _score = [f"{x:.3f}" for x in scores]
-    elif scores:
+    elif scores is not None:
         _score = f"{scores:.3f}"
     
     if _score:

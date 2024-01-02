@@ -451,6 +451,10 @@ def evaluate_model(
                 **kwargs,
             )
 
+        def remove_prefix(x, p):
+            return x.replace(p, "") if x.startswith(p) else x
+        kwargs = {remove_prefix(k, "prompt_"):v for k,v in kwargs.items()}
+
         save_to = get_output_path(
             output_dir,
             dataset_name,

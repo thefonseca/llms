@@ -206,11 +206,11 @@ class HFModel(BaseLM):
             generation_kwargs["temperature"] = temperature
             generation_kwargs["top_p"] = top_p
 
-        force_words_ids = generation_kwargs.pop('force_word_ids', None)
+        force_words_ids = generation_kwargs.pop("force_word_ids", None)
         if force_words and force_words_ids is None:
             if isinstance(force_words, str):
                 force_words = [[force_words]]
-            
+
             # by default, assume a conjunctive constraint
             if isinstance(force_words[0], str):
                 force_words = [[word] for word in force_words]

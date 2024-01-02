@@ -67,7 +67,10 @@ class BaseLM:
             max_tokens = generation_kwargs.get("max_tokens", self.default_max_tokens())
             log(logger, f"Truncating input to {max_tokens} max tokens", verbose=verbose)
             model_input, truncated_tokens = self.truncate_input(model_input, max_tokens)
-
+        # Convention: arguments starting with "prompt_" are using only in prompts 
+        generation_kwargs = {
+            k: v for k, v in generation_kwargs.items() if not k.startswith("prompt_")
+        }
         return model_input, truncated_tokens, generation_kwargs
 
     def postprocess(self, output):
@@ -224,15 +227,9 @@ class PromptBasedLM(BaseLM):
         )
         prompt_args = dict(prompt_args, **self.get_prompt_args())
         def remove_prefix(x):
-            if x.startswith("prompt_"):
-                x = x.replace("prompt_", "")
-            return x
+            return x.replace("prompt_", "") if x.startswith("prompt_") else x
         prompt_args = {remove_prefix(k):v for k,v in prompt_args.items()}
-        # Convention: arguments starting with "prompt_" are using only in prompts 
-        generation_kwargs = {
-            k: v for k, v in generation_kwargs.items() if not k.startswith("prompt_")
-        }
-
+        
         if isinstance(input_data, dict):
             prompt_args = dict(prompt_args, **input_data)
         else:
