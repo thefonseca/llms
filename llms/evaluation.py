@@ -27,7 +27,7 @@ def _get_samples_for_key(data, key):
     samples = None
 
     if isinstance(key, str):
-        samples = data[key]
+        samples = data.get(key)
     elif isinstance(key, dict):
         samples = []
         try:
@@ -40,13 +40,14 @@ def _get_samples_for_key(data, key):
                     else:
                         samples[idx][template_key] = val
         except:
-            logger.warning(f"'Source/target {key}' not found in dataset")
             samples = None
     else:
         logger.warning(
-            f"Source/target key must be a string or dict but is of type {type(key)}"
+            f"Key '{key}' must be a string or dict but is of type {type(key)}"
         )
 
+    if samples is None:
+        logger.warning(f"Key '{key}' not found in dataset")
     return samples
 
 
@@ -130,7 +131,7 @@ def _load_eval_data(
     dataset_name=None,
     dataset_config=None,
     split=None,
-    source_file=None,
+    source_path=None,
     arxiv_id=None,
     arxiv_query=None,
     max_samples=None,
@@ -158,15 +159,15 @@ def _load_eval_data(
             arxiv_data_path = os.path.join(save_to, "arxiv-data.json")
             pd.DataFrame(eval_data).to_json(arxiv_data_path)
         logger.info(f"Loaded {len(eval_data)} samples from arXiv API: {dataset_config}")
-    elif source_file and Path(source_file).suffix == ".pdf":
-        text = pdf_to_text(source_file)
-        eval_data = {source_key: [text], target_key: []}
-        logger.info(f"Loaded PDF from {source_file}")
-    elif source_file and Path(source_file).suffix == ".txt":
-        with open(source_file) as fh:
+    elif source_path and Path(source_path).suffix == ".pdf":
+        text = pdf_to_text(source_path)
+        eval_data = {source_key: [text]}
+        logger.info(f"Loaded PDF from {source_path}")
+    elif source_path and Path(source_path).suffix == ".txt":
+        with open(source_path) as fh:
             text = fh.readlines()
-        eval_data = {source_key: [text], target_key: []}
-        logger.info(f"Loaded text from {source_file}")
+        eval_data = {source_key: [text]}
+        logger.info(f"Loaded text from {source_path}")
     elif Path(dataset_name).suffix == ".json":
         eval_data = pd.read_json(dataset_name)
         key = eval_data.columns[0]
@@ -334,9 +335,9 @@ def evaluate_model(
     dataset_name=None,
     dataset_config=None,
     split=None,
-    source_key=None,
-    target_key=None,
-    source_file=None,
+    source_key="source",
+    target_key="target",
+    source_path=None,
     arxiv_id=None,
     arxiv_query=None,
     model_name=None,
@@ -365,9 +366,9 @@ def evaluate_model(
             dataset_name, dataset_config, split, output_dir, run_id=run_id
         )
 
-    if all(x is None for x in [dataset_name, arxiv_id, arxiv_query, source_file]):
+    if all(x is None for x in [dataset_name, arxiv_id, arxiv_query, source_path]):
         raise ValueError(
-            "Plese specify one of 'dataset_name', 'arxiv_id', 'arxiv_query', or 'source_file'"
+            "Plese specify one of 'dataset_name', 'arxiv_id', 'arxiv_query', or 'source_path'"
         )
 
     if model_name is None and prediction_path is None:
@@ -379,7 +380,7 @@ def evaluate_model(
         dataset_name=dataset_name,
         dataset_config=dataset_config,
         split=split,
-        source_file=source_file,
+        source_path=source_path,
         arxiv_id=arxiv_id,
         arxiv_query=arxiv_query,
         max_samples=max_samples,
