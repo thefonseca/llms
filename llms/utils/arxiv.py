@@ -132,7 +132,7 @@ def load_arxiv_article(
 def search_arxiv(
     id_list=None,
     query=None,
-    max_results=None,
+    max_results=100,
     sort_by=SortCriterion.Relevance,
     sort_order=SortOrder.Descending,
     remove_abstract=False,
@@ -152,19 +152,21 @@ def search_arxiv(
             paper = load_arxiv_article(arxiv_id, remove_abstract=remove_abstract)
             papers.append(paper)
     else:
+        # Construct the default API client.
+        client = arxiv.Client()
         search = arxiv.Search(
             query=query,
-            id_list=id_list,
             max_results=max_results,
             sort_by=sort_by,
             sort_order=sort_order,
         )
-        results = [r for r in search.results()]
+        results = client.results(search)
+        # results = [r for r in search.results()]
         progress = get_progress_bar()
         task = add_progress_task(
             progress,
             f"Loading articles from arXiv...",
-            total=len(results),
+            total=max_results,
             existing_ok=False,
         )
         with progress:
@@ -197,7 +199,7 @@ def clean_arxiv_text(arxiv_text):
     return arxiv_text
 
 
-def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
+def load_arxiv_data(arxiv_id, arxiv_query, max_samples):
     if isinstance(arxiv_id, list):
         arxiv_id = [str(x) for x in arxiv_id]
     else:
@@ -213,12 +215,12 @@ def load_arxiv_data(arxiv_id, arxiv_query, max_samples, source_key, target_key):
     if max_samples is None:
         max_samples = float("inf")
     else:
+        # add 10% more samples as some of them will not be valid
         max_samples = int(max_samples * 1.1)
 
     papers = search_arxiv(
         arxiv_id,
         arxiv_query,
-        # add 10% more samples as some of them will not be valid
         max_results=max_samples,
         sort_by=SortCriterion.SubmittedDate,
         remove_abstract=True,
