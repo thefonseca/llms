@@ -27,7 +27,10 @@ def _get_samples_for_key(data, key):
     samples = None
 
     if isinstance(key, str):
-        samples = data.get(key)
+        try:
+            samples = data[key]
+        except:
+            pass
     elif isinstance(key, dict):
         samples = []
         try:
@@ -102,7 +105,7 @@ def _preprocess_kwargs(kwargs, sample_idxs=None, max_samples=None):
 
             if values is not None:
                 logger.info(f"Loaded {len(values)} '{arg_key}' values from {arg_val}.")
-                
+
                 if sample_idxs and len(sample_idxs) == len(values):
                     values = [values[idx] for idx in sample_idxs]
                     logger.info(
@@ -116,7 +119,7 @@ def _preprocess_kwargs(kwargs, sample_idxs=None, max_samples=None):
 
                 kwargs_[arg_key] = values[:max_samples]
                 kwargs_.pop(key)
-                
+
         elif key.endswith("_path"):
             logger.warning(
                 f"Could not load argment values. File does not exist: {arg_val}"
@@ -131,7 +134,6 @@ def _load_eval_data(
     dataset_name=None,
     dataset_config=None,
     split=None,
-    source_path=None,
     arxiv_id=None,
     arxiv_query=None,
     max_samples=None,
@@ -159,15 +161,15 @@ def _load_eval_data(
             arxiv_data_path = os.path.join(save_to, "arxiv-data.json")
             pd.DataFrame(eval_data).to_json(arxiv_data_path)
         logger.info(f"Loaded {len(eval_data)} samples from arXiv API: {dataset_config}")
-    elif source_path and Path(source_path).suffix == ".pdf":
-        text = pdf_to_text(source_path)
+    elif Path(dataset_name).suffix == ".pdf":
+        text = pdf_to_text(dataset_name)
         eval_data = {source_key: [text]}
-        logger.info(f"Loaded PDF from {source_path}")
-    elif source_path and Path(source_path).suffix == ".txt":
-        with open(source_path) as fh:
+        logger.info(f"Loaded PDF from {dataset_name}")
+    elif Path(dataset_name).suffix == ".txt":
+        with open(dataset_name) as fh:
             text = fh.readlines()
         eval_data = {source_key: [text]}
-        logger.info(f"Loaded text from {source_path}")
+        logger.info(f"Loaded text from {dataset_name}")
     elif Path(dataset_name).suffix == ".json":
         eval_data = pd.read_json(dataset_name)
         key = eval_data.columns[0]
@@ -180,7 +182,9 @@ def _load_eval_data(
         eval_data = datasets.load_dataset(
             dataset_name, dataset_config, cache_dir=data_cache_dir
         )
-        logger.info(f"Loaded {len(eval_data[split])} {split} samples from {dataset_name}/{dataset_config}")
+        logger.info(
+            f"Loaded {len(eval_data[split])} {split} samples from {dataset_name}/{dataset_config}"
+        )
         eval_data = eval_data[split]
     return eval_data
 
@@ -337,7 +341,6 @@ def evaluate_model(
     split=None,
     source_key="source",
     target_key="target",
-    source_path=None,
     arxiv_id=None,
     arxiv_query=None,
     model_name=None,
@@ -366,9 +369,9 @@ def evaluate_model(
             dataset_name, dataset_config, split, output_dir, run_id=run_id
         )
 
-    if all(x is None for x in [dataset_name, arxiv_id, arxiv_query, source_path]):
+    if all(x is None for x in [dataset_name, arxiv_id, arxiv_query]):
         raise ValueError(
-            "Plese specify one of 'dataset_name', 'arxiv_id', 'arxiv_query', or 'source_path'"
+            "Plese specify one of 'dataset_name', 'arxiv_id', 'arxiv_query'"
         )
 
     if model_name is None and prediction_path is None:
@@ -380,7 +383,6 @@ def evaluate_model(
         dataset_name=dataset_name,
         dataset_config=dataset_config,
         split=split,
-        source_path=source_path,
         arxiv_id=arxiv_id,
         arxiv_query=arxiv_query,
         max_samples=max_samples,
@@ -454,7 +456,8 @@ def evaluate_model(
 
         def remove_prefix(x, p):
             return x.replace(p, "") if x.startswith(p) else x
-        kwargs = {remove_prefix(k, "prompt_"):v for k,v in kwargs.items()}
+
+        kwargs = {remove_prefix(k, "prompt_"): v for k, v in kwargs.items()}
 
         save_to = get_output_path(
             output_dir,
