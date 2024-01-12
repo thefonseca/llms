@@ -152,12 +152,13 @@ def _load_eval_data(
         dataset_config = arxiv_id if arxiv_id else arxiv_query
         save_to = get_output_path(
             output_dir,
-            "arxiv_api",
+            dataset_name,
             dataset_config,
             timestr=timestr,
             run_id=run_id,
         )
         if save_to:
+            os.makedirs(save_to, exist_ok=True)
             arxiv_data_path = os.path.join(save_to, "arxiv-data.json")
             pd.DataFrame(eval_data).to_json(arxiv_data_path)
         logger.info(f"Loaded {len(eval_data)} samples from arXiv API: {dataset_config}")

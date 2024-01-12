@@ -86,40 +86,47 @@ def get_sample_gen_kwargs(kwargs, sample_idx):
 
 
 def token_statistics(
-        model,
-        inputs,
-        truncation=True,
-        show_progress=True,
-        **generation_kwargs,
-    ):
-        progress = get_progress_bar()
-        task = add_progress_task(
-            progress,
-            f"Calculating token statistics for {model.model_name}...",
-            total=len(inputs),
-            existing_ok=False,
-        )
-        progress.update(task, visible=show_progress)
-        truncated_tokens = []
-        num_tokens = []
+    model,
+    inputs,
+    truncation=True,
+    ignore_errors=False,
+    show_progress=True,
+    **generation_kwargs,
+):
+    progress = get_progress_bar()
+    task = add_progress_task(
+        progress,
+        f"Calculating token statistics for {model.model_name}...",
+        total=len(inputs),
+        existing_ok=False,
+    )
+    progress.update(task, visible=show_progress)
+    truncated_tokens = []
+    num_tokens = []
 
-        with progress:
-            for idx, input_data in enumerate(inputs):
-                sample_kwargs = get_sample_gen_kwargs(generation_kwargs, idx)
-                result = model.token_statistics(
-                    input_data, truncation, **sample_kwargs
-                )
+    with progress:
+        for idx, input_data in enumerate(inputs):
+            sample_kwargs = get_sample_gen_kwargs(generation_kwargs, idx)
+            try:
+                result = model.token_statistics(input_data, truncation, **sample_kwargs)
                 num_tokens.append(result[0])
                 truncated_tokens.append(result[1])
-                progress.update(task, advance=1)
+            except Exception as err:
+                logger.error(f"Failed to compute token statistics for sample {idx}")
+                if ignore_errors:
+                    logger.error(err)
+                else:
+                    raise err
 
-        stats = dict(
-            total_tokens=sum(num_tokens),
-            mean_tokens=np.mean(num_tokens),
-            total_truncation=sum(truncated_tokens),
-            mean_truncation=np.mean(truncated_tokens),
-        )
-        return stats
+            progress.update(task, advance=1)
+
+    stats = dict(
+        total_tokens=sum(num_tokens),
+        mean_tokens=np.mean(num_tokens),
+        total_truncation=sum(truncated_tokens),
+        mean_truncation=np.mean(truncated_tokens),
+    )
+    return stats
 
 
 def generate(
@@ -167,6 +174,7 @@ def generate(
             model,
             sources,
             max_length=max_length,
+            ignore_errors=ignore_errors,
             show_progress=show_progress,
             **generation_kwargs,
         )
