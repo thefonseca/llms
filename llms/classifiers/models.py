@@ -417,6 +417,6 @@ class OpenAIClassifier(InstructTunedClassifier, OpenAIChat):
         super().__init__(model_name, **kwargs)
 
     def postprocess(self, output):
-        output = output["choices"][0]["message"]["content"]
+        output = output.choices[0].message.content
         output = super().postprocess(output)
         return output

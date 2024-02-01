@@ -1,12 +1,10 @@
 import os
 
-import openai
+from openai import OpenAI
 import tiktoken
 
 from .base import PromptBasedLM
 from ..utils.memoizer import memoize
-
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
 class OpenAIChat(PromptBasedLM):
@@ -15,6 +13,7 @@ class OpenAIChat(PromptBasedLM):
         self.tokenizer = self.load_tokenizer()
         # wait an interval in seconds between requests
         self.request_interval = request_interval
+        self.client = OpenAI()
 
     def load_tokenizer(self):
         try:
@@ -47,15 +46,15 @@ class OpenAIChat(PromptBasedLM):
     def default_max_tokens(self):
         return 4096
 
-    @staticmethod
     @memoize()
     def generate_cached(
+        self,
         model_name,
         model_input,
         memoizer_ignore_cache=False,
         **generation_kwargs,
     ):
-        response = openai.ChatCompletion.create(
+        response = self.client.chat.completions.create(
             model=model_name, messages=model_input, **generation_kwargs
         )
         return response
@@ -73,6 +72,6 @@ class OpenAIChat(PromptBasedLM):
 
     def postprocess(self, output):
         if not isinstance(output, str):
-            output = output["choices"][0]["message"]["content"]
+            output = output.choices[0].message.content
         output = super().postprocess(output)
         return output
