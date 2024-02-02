@@ -59,12 +59,24 @@ def scores_to_df(scores, key=None, scores_df=None):
 
 class CustomEncoder(json.JSONEncoder):
     def default(self, obj):
-        if isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
-                            np.int16, np.int32, np.int64, np.uint8,
-                            np.uint16, np.uint32, np.uint64)):
-
+        if isinstance(
+            obj,
+            (
+                np.int_,
+                np.intc,
+                np.intp,
+                np.int8,
+                np.int16,
+                np.int32,
+                np.int64,
+                np.uint8,
+                np.uint16,
+                np.uint32,
+                np.uint64,
+            ),
+        ):
             return int(obj)
-        
+
         return json.JSONEncoder.default(self, obj)
 
 
@@ -143,7 +155,7 @@ def get_metric_info(scores, key=None, info=None):
         _score = [f"{x:.3f}" for x in scores]
     elif scores is not None:
         _score = f"{scores:.3f}"
-    
+
     if _score:
         info.append(f"{key}: {_score}")
     return info
@@ -167,7 +179,7 @@ def get_confidence_interval(scores):
     scores = _scores
     confidence_interval = {}
 
-    def is_constant(a): # avoid DegenerateDataWarning
+    def is_constant(a):  # avoid DegenerateDataWarning
         a = np.array(a)
         return (np.isclose(a, a[0]) | np.isnan(a)).all()
 
@@ -318,12 +330,18 @@ def rouge_score(prediction, reference, rouge_ngrams=None):
 
 
 def generation_metrics(
-    prediction, reference=None, source=None, budget=None, index=None, parallelized=False
+    prediction,
+    reference=None,
+    source=None,
+    budget=None,
+    index=None,
+    parallelized=False,
+    **kwargs,
 ):
     metrics = {}
     if source is not None:
         metrics["source_stats"] = text_statistics(source)
-    
+
     if prediction is not None:
         metrics["prediction_stats"] = text_statistics(str(prediction))
 
@@ -340,7 +358,7 @@ def generation_metrics(
             if budget and "sentences_per_sample" in metrics["reference_stats"]:
                 n_sents = metrics["reference_stats"]["sentences_per_sample"]
                 metrics["reference_budget_diff"] = abs(n_sents - budget)
-            
+
             if prediction is not None:
                 metrics["length_diff_prediction_vs_reference"] = {}
                 for x in ["sentences", "tokens"]:

@@ -86,7 +86,7 @@ def get_output_path(
             save_subdir = f"{save_subdir}_{run_id}"
 
         if model_name:
-            save_to = re.sub("[^\w\d]", "_", model_name)
+            save_to = re.sub(r"[^\w\d]", "_", model_name)
             save_to = re.sub("^_+", "", save_to)
             save_to = os.path.join(output_dir, save_subdir, save_to)
         else:
@@ -164,7 +164,7 @@ def config_logging(
         os.makedirs(log_dir, exist_ok=True)
         handlers.append(logging.FileHandler(log_path, mode="w"))
     logging.basicConfig(
-        level=os.environ.get("LOG_LEVEL", "INFO"),
+        level=int(os.environ.get("LOG_LEVEL", logging.INFO)),
         handlers=handlers,
         force=True,
     )

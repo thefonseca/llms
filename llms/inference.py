@@ -21,23 +21,24 @@ from .utils.utils import get_progress_bar, add_progress_task
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_MODEL_NAME = "gpt-3.5-turbo"
 MODEL_CACHE = {}
 
 DEFAULT_MODEL_MAP = {
-    "gpt-[-\d\w]*": OpenAIChat,
-    "facebook/opt-[\d\w]+": CausalLM,
-    ".*[cC]ode[Ll]lama-[\d\w]+-[Ii]nstruct-hf": LlamaChat,
-    ".*llama-?2.*chat.*": LlamaChat,
-    ".*[Ll]lama.*": CausalLM,
-    "bigscience/T0[_\d\w]*": InstructText2TextLM,
-    "google/flan-t5[-\d\w]+": InstructText2TextLM,
-    "google/long-t5[-\d\w]+": InstructText2TextLM,
-    ".*alpaca.*": Alpaca,
-    ".*vicuna.*": Vicuna,
-    "mosaicml/mpt[-\d\w]$": CausalLM,
-    "tiiuae/falcon[-\d\w]$": CausalLM,
-    "mosaicml/mpt[-\d\w]+instruct": Alpaca,
-    "tiiuae/falcon[-\d\w]+instruct": InstructCausalLM,
+    r"gpt-[-\d\w]*": OpenAIChat,
+    r"facebook/opt-[\d\w]+": CausalLM,
+    r".*[cC]ode[Ll]lama-[\d\w]+-[Ii]nstruct-hf": LlamaChat,
+    r".*llama-?2.*chat.*": LlamaChat,
+    r".*[Ll]lama.*": CausalLM,
+    r"bigscience/T0[_\d\w]*": InstructText2TextLM,
+    r"google/flan-t5[-\d\w]+": InstructText2TextLM,
+    r"google/long-t5[-\d\w]+": InstructText2TextLM,
+    r".*alpaca.*": Alpaca,
+    r".*vicuna.*": Vicuna,
+    r"mosaicml/mpt[-\d\w]$": CausalLM,
+    r"tiiuae/falcon[-\d\w]$": CausalLM,
+    r"mosaicml/mpt[-\d\w]+instruct": Alpaca,
+    r"tiiuae/falcon[-\d\w]+instruct": InstructCausalLM,
 }
 
 
@@ -71,6 +72,26 @@ def get_model_class(model_name, model_map=None, default_class=None):
             summarizer_class = Text2TextLM
 
     return summarizer_class
+
+
+def preprocess_kwargs(kwargs):
+    kwargs = dict(kwargs)
+    if "model_name" not in kwargs:
+        kwargs["model_name"] = os.getenv("LLM_MODEL_NAME", DEFAULT_MODEL_NAME)
+
+    if kwargs.pop("ignore_cache", False) is True:
+        kwargs["cache_end"] = 0
+
+    if "prompt" in kwargs:
+        kwargs["user_prompt"] = kwargs.pop("prompt")
+
+    if kwargs.pop("verbose", True) is False:
+        os.environ["LOG_LEVEL"] = str(logging.WARNING)
+
+    if "input_path" in kwargs:
+        kwargs["dataset_name"] = kwargs.pop("input_path", None)
+
+    return kwargs
 
 
 def get_sample_gen_kwargs(kwargs, sample_idx):
@@ -160,6 +181,10 @@ def generate(
     if model_class is None:
         model_class = get_model_class(model_name)
 
+    if isinstance(model_class, (LlamaChat, Alpaca, Vicuna)) and "dtype" not in model_kwargs:
+        # default dtype for Llama-based models
+        model_kwargs["dtype"] = "float16"
+
     logger.info(f"Using model: {model_class}")
     model = model_class(model_name, **model_kwargs)
 
@@ -184,6 +209,7 @@ def generate(
         for idx, text in enumerate(sources):
             sample_kwargs = get_sample_gen_kwargs(generation_kwargs, idx)
             ignore_cache = idx < cache_start or idx >= cache_end
+ 
             try:
                 output = model.generate(
                     text,
@@ -204,6 +230,11 @@ def generate(
             progress.update(task, advance=1)
 
             is_cache_hit = model.is_last_result_from_cache()
+            if is_cache_hit and len(sources) == 1 and not ignore_cache:
+                logger.warning(
+                    "This model output is taken from cache. To force a new generation use --ignore_cache."
+                )
+
             if (
                 hasattr(model, "request_interval")
                 and model.request_interval > 0
@@ -214,6 +245,16 @@ def generate(
     return outputs
 
 
+def run(**kwargs):
+    kwargs = preprocess_kwargs(kwargs)
+    outputs = generate(**kwargs)
+    if len(outputs) == 1:
+        print(f"> {kwargs['model_name']}:\n{outputs[0]}")
+
+
+def main():
+    fire.Fire(run)
+
+
 if __name__ == "__main__":
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    fire.Fire(generate)
+    main()

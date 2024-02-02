@@ -16,16 +16,16 @@ cd llms && pip install -e .
 ```
 
 ## Classification
-```
-python -m llms.classifiers.evaluation \
---model_name llama-2-7b-chat 
---model_checkpoint_path path_to_llama2_checkpoint 
---model_dtype fp16 
---dataset_name imdb 
---split test 
---source_key text 
---target_key label 
---model_labels "{'Positive':1,'Negative':0}" 
+```bash
+llm-classify \
+--model_name llama-2-7b-chat \
+--model_checkpoint_path path_to_llama2_checkpoint \
+--model_dtype float16 \
+--dataset_name imdb \
+--split test \
+--source_key text \
+--target_key label \
+--model_labels "{'Positive':1,'Negative':0}" \
 --max_samples 1000
 ```
 
@@ -33,7 +33,7 @@ python -m llms.classifiers.evaluation \
 Evaluating [BigBird](https://github.com/google-research/bigbird) on [PubMed](https://huggingface.co/datasets/scientific_papers) validation split, and saving the results on the `output` folder:
 
 ```bash
-python -m llms.summarizers.evaluation \
+llm-summarize \
 --dataset_name scientific_papers \
 --dataset_config pubmed \
 --split validation \
@@ -48,13 +48,13 @@ where `--model_name` is a [huggingface model identifier](https://huggingface.co/
 Evaluating [Alpaca](https://github.com/tatsu-lab/stanford_alpaca) (float16) on [arXiv](https://huggingface.co/datasets/scientific_papers) validation split:
 
 ```bash
-python -m llms.summarizers.evaluation \
+llm-summarize \
 --arxiv_id https://arxiv.org/abs/2304.15004v1 \
 --model_name alpaca-7b \
 --model_checkpoint_path path_to_alpaca_checkpoint \
 --budget 7 \
 --budget_unit sentences \
---model_dtype fp16 \
+--model_dtype float16 \
 --output_dir output
 ```
 
@@ -67,7 +67,7 @@ Evaluating [ChatGPT API](https://platform.openai.com/docs/api-reference/chat) on
 
 ```bash
 export OPENAI_API_KEY=<your_api_key>
-python -m llms.summarizers.evaluation \
+llm-summarize \
 --dataset_name scientific_papers \
 --dataset_config arxiv \
 --split validation \
@@ -81,7 +81,7 @@ python -m llms.summarizers.evaluation \
 Evaluating summary predictions from a CSV file:
 
 ```bash
-python -m llms.summarizers.evaluation \
+llm-summarize \
 --dataset_name scientific_papers \
 --dataset_config arxiv \
 --split validation \

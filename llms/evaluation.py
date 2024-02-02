@@ -9,7 +9,7 @@ import pandas as pd
 from p_tqdm import p_map
 
 from .utils.arxiv import load_arxiv_data, pdf_to_text
-from .inference import generate
+from .inference import generate, preprocess_kwargs
 from .metrics import (
     aggregate_metrics,
     compute_metrics,
@@ -50,7 +50,7 @@ def _get_samples_for_key(data, key):
         )
 
     if samples is None:
-        logger.warning(f"Key '{key}' not found in dataset")
+        logger.info(f"Key '{key}' not found in dataset")
     return samples
 
 
@@ -149,7 +149,6 @@ def _load_eval_data(
             source_key: [p["text"] for p in papers],
             target_key: [p["summary"] for p in papers],
         }
-        dataset_config = arxiv_id if arxiv_id else arxiv_query
         save_to = get_output_path(
             output_dir,
             dataset_name,
@@ -162,6 +161,8 @@ def _load_eval_data(
             arxiv_data_path = os.path.join(save_to, "arxiv-data.json")
             pd.DataFrame(eval_data).to_json(arxiv_data_path)
         logger.info(f"Loaded {len(eval_data)} samples from arXiv API: {dataset_config}")
+    elif dataset_name is None:
+        eval_data = None
     elif Path(dataset_name).suffix == ".pdf":
         text = pdf_to_text(dataset_name)
         eval_data = {source_key: [text]}
@@ -251,6 +252,7 @@ def evaluate(
     n_samples=None,
     parallelize=False,
     save_sources=False,
+    verbose=False,
     seed=17,
     **kwargs,
 ):
@@ -282,7 +284,7 @@ def evaluate(
         sources=sources,
         references=targets,
         parallelized=False,
-        verbose=True,
+        verbose=verbose,
         **kwargs,
     )
 
@@ -364,15 +366,11 @@ def evaluate_model(
 ):
     if arxiv_id or arxiv_query:
         dataset_name = "arxiv-api"
+        dataset_config = arxiv_id if arxiv_id else arxiv_query
 
     if timestr is None:
         timestr = config_logging(
             dataset_name, dataset_config, split, output_dir, run_id=run_id
-        )
-
-    if all(x is None for x in [dataset_name, arxiv_id, arxiv_query]):
-        raise ValueError(
-            "Plese specify one of 'dataset_name', 'arxiv_id', 'arxiv_query'"
         )
 
     if model_name is None and prediction_path is None:
@@ -392,8 +390,12 @@ def evaluate_model(
         run_id=run_id,
         data_cache_dir=data_cache_dir,
     )
-    sources = _get_samples_for_key(eval_data, source_key)
-    targets = _get_samples_for_key(eval_data, target_key) if target_key else None
+
+    sources = None
+    targets = None
+    if eval_data is not None:
+        sources = _get_samples_for_key(eval_data, source_key)
+        targets = _get_samples_for_key(eval_data, target_key) if target_key else None
 
     if preprocess_fn:
         sources, targets = preprocess_fn(
@@ -445,7 +447,10 @@ def evaluate_model(
             )
             logger.info(f"Evaluating {model_name} on {len(predictions)} samples...")
         else:
-            logger.info(f"Evaluating {model_name} on {len(sources)} samples...")
+            if sources:
+                logger.info(f"Evaluating {model_name} on {len(sources)} samples...")
+            else:
+                logger.info(f"Evaluating {model_name}...")
             predictions = generate(
                 model_name,
                 sources,
@@ -490,9 +495,15 @@ def evaluate_model(
 
 
 def run(**kwargs):
-    evaluate_model(**kwargs)
+    kwargs = preprocess_kwargs(kwargs)
+    outputs = evaluate_model(**kwargs)["predictions"]
+    if len(outputs) == 1:
+        print(f"> {kwargs['model_name']}:\n{outputs[0]}")
+
+
+def main():
+    fire.Fire(run)
 
 
 if __name__ == "__main__":
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    fire.Fire(run)
+    main()

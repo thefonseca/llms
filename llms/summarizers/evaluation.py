@@ -1,10 +1,9 @@
 import logging
-import os
 
 import fire
 
 from ..evaluation import evaluate_model
-from ..inference import get_model_class
+from ..inference import get_model_class, preprocess_kwargs
 from .metrics import summarization_metrics
 
 from .huggingface import (
@@ -25,22 +24,22 @@ logger = logging.getLogger(__name__)
 
 
 MODEL_MAP = {
-    "gpt-[-\d\w]*": OpenAISummarizer,
-    "facebook/opt-[\d\w]+": CausalLMSummarizer,
-    ".*llama-?2.*chat.*": LlamaChatSummarizer,
-    ".*llama-?2.*": Llama2Summarizer,
-    ".*llama.*": CausalLMSummarizer,
-    "bigscience/T0[_\d\w]*": InstructText2TextSummarizer,
-    "google/flan-t5[-\d\w]+": InstructText2TextSummarizer,
-    "google/long-t5[-\d\w]+": InstructText2TextSummarizer,
-    ".*alpaca.*": AlpacaSummarizer,
-    ".*vicuna.*": VicunaSummarizer,
-    "summarize-((medium)|(xlarge))": CohereSummarizer,
-    "mosaicml/mpt[-\d\w]$": CausalLMSummarizer,
-    "tiiuae/falcon[-\d\w]+chat": FalconChatSummarizer,
-    "tiiuae/falcon[-\d\w]+instruct": InstructCausalLMSummarizer,
-    "tiiuae/falcon[-\d\w]$": CausalLMSummarizer,
-    "mosaicml/mpt[-\d\w]+instruct": AlpacaSummarizer,
+    r"gpt-[-\d\w]*": OpenAISummarizer,
+    r"facebook/opt-[\d\w]+": CausalLMSummarizer,
+    r".*llama-?2.*chat.*": LlamaChatSummarizer,
+    r".*llama-?2.*": Llama2Summarizer,
+    r".*llama.*": CausalLMSummarizer,
+    r"bigscience/T0[_\d\w]*": InstructText2TextSummarizer,
+    r"google/flan-t5[-\d\w]+": InstructText2TextSummarizer,
+    r"google/long-t5[-\d\w]+": InstructText2TextSummarizer,
+    r".*alpaca.*": AlpacaSummarizer,
+    r".*vicuna.*": VicunaSummarizer,
+    r"summarize-((medium)|(xlarge))": CohereSummarizer,
+    r"mosaicml/mpt[-\d\w]$": CausalLMSummarizer,
+    r"tiiuae/falcon[-\d\w]+chat": FalconChatSummarizer,
+    r"tiiuae/falcon[-\d\w]+instruct": InstructCausalLMSummarizer,
+    r"tiiuae/falcon[-\d\w]$": CausalLMSummarizer,
+    r"mosaicml/mpt[-\d\w]+instruct": AlpacaSummarizer,
 }
 
 
@@ -53,8 +52,7 @@ def get_summarizer_model_class(
     return model_class
 
 
-def evaluate_summarizer(model_name=None, metrics=None, **kwargs):
-    model_class = kwargs.pop("model_class", None)
+def evaluate_summarizer(model_name=None, model_class=None, metrics=None, **kwargs):
     if model_name and model_class is None:
         model_class = get_summarizer_model_class(model_name)
     if metrics is None:
@@ -70,9 +68,15 @@ def evaluate_summarizer(model_name=None, metrics=None, **kwargs):
 
 
 def run(**kwargs):
-    evaluate_summarizer(**kwargs)
+    kwargs = preprocess_kwargs(kwargs)
+    outputs = evaluate_summarizer(**kwargs)["predictions"]
+    if len(outputs) == 1:
+        print(f"> {kwargs['model_name']}:\n{outputs[0]}")
+
+
+def main():
+    fire.Fire(run)
 
 
 if __name__ == "__main__":
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    fire.Fire(run)
+    main()

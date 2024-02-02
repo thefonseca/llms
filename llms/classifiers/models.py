@@ -1,7 +1,6 @@
 import logging
 from pprint import pformat
 import random
-import re
 
 import numpy as np
 import torch
@@ -351,7 +350,7 @@ class DynamicContextClassifier(BaseClassifier):
             logger.debug(f"Using {len(samples)} samples from memory")
 
             prompt = [
-                f"{{input_type}}: {s['text']}\{{label_type}}: {s['label']}"
+                f"{{input_type}}: {s['text']}\n{{label_type}}: {s['label']}"
                 for s in samples
             ]
             prompt = "\n\n".join(prompt)

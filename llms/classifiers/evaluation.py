@@ -1,10 +1,9 @@
 import logging
-import os
 
 import fire
 
 from ..evaluation import evaluate_model
-from ..inference import get_model_class
+from ..inference import get_model_class, preprocess_kwargs
 from ..metrics import generation_metrics
 
 from .lmql import (
@@ -29,19 +28,19 @@ logger = logging.getLogger(__name__)
 
 
 MODEL_MAP = {
-    "lmql:.*vicuna.*": LMQLVicunaClassifier,
-    "lmql:.*llama-?2.*": LMQLLlamaChatClassifier,
-    "lmql:.*": LMQLInstructCausalLMClassifier,
-    "gpt-[-\d\w]*": OpenAIClassifier,
-    ".*llama-?2.*chat.*": LlamaChatClassifier,
-    "llama-?2.*": Llama2Classifier,
-    "llama.*": CausalLMClassifier,
-    ".*alpaca.*": AlpacaClassifier,
-    ".*vicuna.*": VicunaClassifier,
-    "mosaicml/mpt[-\d\w]+instruct": AlpacaClassifier,
-    "tiiuae/falcon[-\d\w]+chat": FalconChatClassifier,
-    "tiiuae/falcon[-\d\w]+instruct": InstructCausalLMClassifier,
-    "mistralai/Mistral[-\d\w]+Instruct.*": MistralInsructClassifier,
+    r"lmql:.*vicuna.*": LMQLVicunaClassifier,
+    r"lmql:.*llama-?2.*": LMQLLlamaChatClassifier,
+    r"lmql:.*": LMQLInstructCausalLMClassifier,
+    r"gpt-[-\d\w]*": OpenAIClassifier,
+    r".*llama-?2.*chat.*": LlamaChatClassifier,
+    r"llama-?2.*": Llama2Classifier,
+    r"llama.*": CausalLMClassifier,
+    r".*alpaca.*": AlpacaClassifier,
+    r".*vicuna.*": VicunaClassifier,
+    r"mosaicml/mpt[-\d\w]+instruct": AlpacaClassifier,
+    r"tiiuae/falcon[-\d\w]+chat": FalconChatClassifier,
+    r"tiiuae/falcon[-\d\w]+instruct": InstructCausalLMClassifier,
+    r"mistralai/Mistral[-\d\w]+Instruct.*": MistralInsructClassifier,
 }
 
 
@@ -85,9 +84,15 @@ def evaluate_classifier(model_name=None, metrics=None, **kwargs):
 
 
 def run(**kwargs):
-    evaluate_classifier(**kwargs)
+    kwargs = preprocess_kwargs(kwargs)
+    outputs = evaluate_classifier(**kwargs)["predictions"]
+    if len(outputs) == 1:
+        print(f"> {kwargs['model_name']}: {outputs[0]}")
+
+
+def main():
+    fire.Fire(run)
 
 
 if __name__ == "__main__":
-    os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    fire.Fire(run)
+    main()
