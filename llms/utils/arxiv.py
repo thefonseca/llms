@@ -7,15 +7,21 @@ import re
 import arxiv
 from arxiv import SortCriterion, SortOrder
 import numpy as np
-import textdistance
 
-from .utils import get_cache_dir, add_progress_task, get_progress_bar, pdf_to_text
+from .utils import (
+    get_cache_dir,
+    add_progress_task,
+    get_progress_bar,
+    pdf_to_text,
+    clean_before_section,
+    remove_article_abstract,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def match_arxiv_id(path):
-    pattern = "(?:(?:https?://)?(?:arxiv.org)(?:\/\w+\/))?(\d{4}\.\d{4,5}(v\d*)?)"
+    pattern = r"(?:(?:https?://)?(?:arxiv.org)(?:\/\w+\/))?(\d{4}\.\d{4,5}(v\d*)?)"
     match = re.match(pattern, path)
     if match:
         return match.groups()[0]
@@ -62,32 +68,11 @@ def load_arxiv_metadata(arxiv_id, arxiv_path, paper=None):
 
     if paper:
         metadata = arxiv_paper_to_dict(paper)
-        arxiv_id = match_arxiv_id(metadata["entry_id"])
         metadata_path = arxiv_metadata_path(arxiv_id, arxiv_path, create_dir=True)
         with open(metadata_path, "w") as fh:
             json.dump(metadata, fh)
 
     return metadata, paper
-
-
-def remove_article_abstract(text, abstract):
-    if isinstance(text, list):
-        text = "".join(text)
-    paragraphs = text.split("\n\n")
-    abstract_idx = None
-    abstract = abstract.split(" ")
-    for idx, par in enumerate(paragraphs):
-        dist = textdistance.lcsseq.distance(par.split(" "), abstract)
-        if dist < 0:
-            abstract_idx = idx
-        elif abstract_idx:
-            break
-    if abstract_idx:
-        text = paragraphs[abstract_idx + 1 :]
-        text = "\n\n".join(text)
-    else:
-        text = None
-    return text
 
 
 def load_arxiv_article(
@@ -182,24 +167,7 @@ def search_arxiv(
     return papers
 
 
-def clean_arxiv_text(arxiv_text):
-    """
-    Removes content before introduction section using a simple heuristic.
-    """
-    lines = arxiv_text.split("\n")
-    idx = 0
-    for line in lines:
-        line = line.strip().lower()
-        if "introduction" in line and len(line.split(" ")) <= 2:
-            break
-        idx += 1
-    arxiv_text = None
-    if len(lines) > idx:
-        arxiv_text = "\n".join(lines[idx:])
-    return arxiv_text
-
-
-def load_arxiv_data(arxiv_id, arxiv_query, max_samples):
+def load_arxiv_data(arxiv_id, arxiv_query, max_samples, remove_abstract=False):
     if isinstance(arxiv_id, list):
         arxiv_id = [str(x) for x in arxiv_id]
     else:
@@ -223,10 +191,14 @@ def load_arxiv_data(arxiv_id, arxiv_query, max_samples):
         arxiv_query,
         max_results=max_samples,
         sort_by=SortCriterion.SubmittedDate,
-        remove_abstract=True,
+        remove_abstract=remove_abstract,
     )
-    
+
     for p in papers:
-        p["text"] = clean_arxiv_text(p["text"])
+        if remove_abstract:
+            p["text"] = clean_before_section(p["text"])
+        elif p["text"]:
+            p["text"] = "\n".join(p["text"])
+
     papers = [p for p in papers if p["text"]]
     return papers

@@ -58,6 +58,12 @@ def evaluate_summarizer(model_name=None, model_class=None, metrics=None, **kwarg
     if metrics is None:
         metrics = []
     metrics.append(summarization_metrics)
+
+    if "target_key" not in kwargs and any(
+        [x in kwargs for x in ["arxiv_id", "arxiv_query"]]
+    ):
+        kwargs["target_key"] = "target"
+
     result = evaluate_model(
         model_name=model_name,
         model_class=model_class,

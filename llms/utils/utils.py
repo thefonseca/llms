@@ -181,6 +181,49 @@ def log(logger, message, level=LOG_LEVEL_FINE, max_length=300):
     logger.log(level, message)
 
 
+def remove_article_abstract(text, abstract):
+    if isinstance(text, list):
+        text = "".join(text)
+    paragraphs = text.split("\n\n")
+    abstract_idx = None
+    abstract = abstract.split(" ")
+    for idx, par in enumerate(paragraphs):
+        dist = textdistance.lcsseq.distance(par.split(" "), abstract)
+        if dist < 0:
+            abstract_idx = idx
+        elif abstract_idx:
+            break
+    if abstract_idx:
+        text = paragraphs[abstract_idx + 1 :]
+        text = "\n\n".join(text)
+    else:
+        text = None
+    return text
+
+
+def clean_before_section(text, section="introduction"):
+    """
+    Removes content before section section using a simple heuristic.
+    """
+    if isinstance(text, list):
+        lines = text
+    else:
+        lines = text.split("\n")
+
+    idx = 0
+    max_line_len = len(section.split()) + 1
+    for line in lines:
+        line = line.strip().lower()
+        if section in line and len(line.split(" ")) <= max_line_len:
+            break
+        idx += 1
+    text = None
+
+    if len(lines) > idx:
+        text = "\n".join(lines[idx:])
+    return text
+
+
 def pdf_to_text(pdf_path):
     try:
         outpath = convert(pdf_path)

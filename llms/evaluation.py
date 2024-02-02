@@ -19,6 +19,7 @@ from .metrics import (
     generation_metrics,
 )
 from .utils.utils import config_logging, get_output_path
+from .utils.utils import clean_before_section as fn_clean_before_section
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,7 @@ def _load_eval_data(
     split=None,
     arxiv_id=None,
     arxiv_query=None,
+    remove_abstract=False,
     max_samples=None,
     output_dir=None,
     timestr=None,
@@ -143,12 +145,15 @@ def _load_eval_data(
     data_cache_dir=None,
 ):
     if arxiv_id or arxiv_query:
-        papers = load_arxiv_data(arxiv_id, arxiv_query, max_samples)
+        papers = load_arxiv_data(
+            arxiv_id, arxiv_query, max_samples, remove_abstract=remove_abstract
+        )
         eval_data = {
             "entry_id": [p["entry_id"] for p in papers],
             source_key: [p["text"] for p in papers],
-            target_key: [p["summary"] for p in papers],
         }
+        if target_key:
+            eval_data[target_key] = [p["summary"] for p in papers]
         save_to = get_output_path(
             output_dir,
             dataset_name,
@@ -160,13 +165,15 @@ def _load_eval_data(
             os.makedirs(save_to, exist_ok=True)
             arxiv_data_path = os.path.join(save_to, "arxiv-data.json")
             pd.DataFrame(eval_data).to_json(arxiv_data_path)
-        logger.info(f"Loaded {len(eval_data)} samples from arXiv API: {dataset_config}")
+        logger.info(
+            f"Loaded {len(eval_data[source_key])} sample(s) from arXiv API: {dataset_config}"
+        )
     elif dataset_name is None:
         eval_data = None
     elif Path(dataset_name).suffix == ".pdf":
         text = pdf_to_text(dataset_name)
         eval_data = {source_key: [text]}
-        logger.info(f"Loaded PDF from {dataset_name}")
+        logger.info(f"Loaded text from {dataset_name}")
     elif Path(dataset_name).suffix == ".txt":
         with open(dataset_name) as fh:
             text = fh.readlines()
@@ -343,13 +350,15 @@ def evaluate_model(
     dataset_config=None,
     split=None,
     source_key="source",
-    target_key="target",
+    target_key=None,
     arxiv_id=None,
     arxiv_query=None,
     model_name=None,
     model_class=None,
     prediction_path=None,
     prediction_key="prediction",
+    remove_abstract=False,
+    clean_before_section=None,
     max_samples=None,
     shuffle=False,
     preprocess_fn=None,
@@ -384,6 +393,7 @@ def evaluate_model(
         split=split,
         arxiv_id=arxiv_id,
         arxiv_query=arxiv_query,
+        remove_abstract=remove_abstract,
         max_samples=max_samples,
         output_dir=output_dir,
         timestr=timestr,
@@ -396,6 +406,9 @@ def evaluate_model(
     if eval_data is not None:
         sources = _get_samples_for_key(eval_data, source_key)
         targets = _get_samples_for_key(eval_data, target_key) if target_key else None
+
+    if clean_before_section:
+        sources = [fn_clean_before_section(s, clean_before_section) for s in sources]
 
     if preprocess_fn:
         sources, targets = preprocess_fn(
