@@ -7,6 +7,7 @@ import time
 import nltk
 from rich.logging import RichHandler
 from rich.progress import Progress, MofNCompleteColumn, SpinnerColumn
+import textdistance
 
 from .fulltext import convert
 
@@ -17,6 +18,8 @@ except:
     nltk.download("punkt", quiet=True)
 
 logger = logging.getLogger(__name__)
+LOG_LEVEL_FINE = 15
+logging.addLevelName(LOG_LEVEL_FINE, 'DETAIL')
 
 
 def get_cache_dir(key=None):
@@ -172,8 +175,7 @@ def config_logging(
     return timestr
 
 
-def log(logger, message, verbose=False, max_length=300):
-    level = logging.INFO if verbose else logging.DEBUG
+def log(logger, message, level=LOG_LEVEL_FINE, max_length=300):
     if max_length and len(message) > max_length:
         message = f"{message[:max_length//2]} ... {message[-max_length//2:]}"
     logger.log(level, message)

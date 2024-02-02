@@ -65,8 +65,12 @@ class BaseLM:
         truncated_tokens = 0
         if truncation:
             max_tokens = generation_kwargs.get("max_tokens", self.default_max_tokens())
-            log(logger, f"Truncating input to {max_tokens} max tokens", verbose=verbose)
-            model_input, truncated_tokens = self.truncate_input(model_input, max_tokens)
+            result = self.truncate_input(model_input, max_tokens)
+            if isinstance(result, tuple):
+                model_input, truncated_tokens = result
+
+            if verbose and truncated_tokens > 0:
+                log(logger, f"Truncated input to {max_tokens} max tokens")
         # Convention: arguments starting with "prompt_" are using only in prompts 
         generation_kwargs = {
             k: v for k, v in generation_kwargs.items() if not k.startswith("prompt_")
@@ -90,14 +94,16 @@ class BaseLM:
         )
         model_kwargs = self.get_model_kwargs()
         kwargs = model_kwargs.copy()
-        log(logger, f"Model kwargs:\n{pformat(kwargs)}", verbose=verbose)
         gen_kwargs_str = f"Generation kwargs:\n{pformat(generation_kwargs)}"
-        log(logger, gen_kwargs_str, verbose=verbose)
         kwargs.update(generation_kwargs)
-        log(logger, f"Model input:\n{pformat(model_input)}", verbose=verbose)
         output = self.generate_cached(self.model_name, model_input, **kwargs)
         output = self.postprocess(output)
-        log(logger, f"Output:\n{pformat(output)}", verbose=verbose, max_length=None)
+
+        if verbose:
+            log(logger, f"Model kwargs:\n{pformat(model_kwargs)}")
+            log(logger, gen_kwargs_str)
+            log(logger, f"Model input:\n{pformat(model_input)}")
+            log(logger, f"Output:\n{pformat(output)}", max_length=None)
         return output
 
     def is_last_result_from_cache(self):
@@ -263,10 +269,11 @@ class PromptBasedLM(BaseLM):
             prompt.append({"role": "user", "content": user_prompt})
             self._user_prompt = user_prompt
 
-        log(logger, f"System prompt: {pformat(system_prompt)}", verbose=verbose)
-        log(logger, f"Context prompt: {pformat(context_prompt)}", verbose=verbose)
-        log(logger, f"Input prompt: {pformat(input_prompt)}", verbose=verbose)
-        log(logger, f"User prompt: {pformat(user_prompt)}", verbose=verbose)
+        if verbose:
+            log(logger, f"System prompt: {pformat(system_prompt)}")
+            log(logger, f"Context prompt: {pformat(context_prompt)}")
+            log(logger, f"Input prompt: {pformat(input_prompt)}")
+            log(logger, f"User prompt: {pformat(user_prompt)}")
         return prompt, generation_kwargs
 
     def num_tokens_for_prompt(self, messages):

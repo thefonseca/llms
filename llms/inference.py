@@ -17,7 +17,7 @@ from .models.huggingface import (
     Vicuna,
 )
 from .models.openai import OpenAIChat
-from .utils.utils import get_progress_bar, add_progress_task
+from .utils.utils import get_progress_bar, add_progress_task, LOG_LEVEL_FINE
 
 logger = logging.getLogger(__name__)
 
@@ -85,8 +85,10 @@ def preprocess_kwargs(kwargs):
     if "prompt" in kwargs:
         kwargs["user_prompt"] = kwargs.pop("prompt")
 
-    if kwargs.pop("verbose", True) is False:
-        os.environ["LOG_LEVEL"] = str(logging.WARNING)
+    if "verbose" not in kwargs and "output_dir" in kwargs:
+        os.environ["LOG_LEVEL"] = str(LOG_LEVEL_FINE)
+    elif kwargs.pop("verbose", False) is True:
+        os.environ["LOG_LEVEL"] = str(LOG_LEVEL_FINE)
 
     if "input_path" in kwargs:
         kwargs["dataset_name"] = kwargs.pop("input_path", None)
@@ -185,7 +187,7 @@ def generate(
         # default dtype for Llama-based models
         model_kwargs["dtype"] = "float16"
 
-    logger.info(f"Using model: {model_class}")
+    logger.log(LOG_LEVEL_FINE, f"Using model: {model_class}")
     model = model_class(model_name, **model_kwargs)
 
     if use_model_cache:
@@ -203,7 +205,7 @@ def generate(
             show_progress=show_progress,
             **generation_kwargs,
         )
-        logger.info(f"Token statistics for input:\n{pformat(stats)}")
+        logger.log(LOG_LEVEL_FINE, f"Token statistics for input:\n{pformat(stats)}")
 
     with progress:
         for idx, text in enumerate(sources):
