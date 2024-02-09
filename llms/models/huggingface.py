@@ -14,6 +14,7 @@ from transformers import (
 )
 
 from ..models.base import BaseLM, PromptBasedLM
+from ..utils.utils import LOG_LEVEL_FINE
 from ..utils.memoizer import memoize
 
 logger = logging.getLogger(__name__)
@@ -39,16 +40,18 @@ class HFModel(BaseLM):
             dtype = self.model_kwargs["dtype"]
             self.model_kwargs["dtype"] = self.infer_dtype(dtype)
 
+    def default_dtype(self):
+        return "auto"
+
     def infer_dtype(self, value):
-        if value is None or not isinstance(value, str):
+        if value and not isinstance(value, str):
             dtype = value
-        elif value == "auto":
-            dtype = "auto"
-        elif hasattr(torch, value):
+        elif value and hasattr(torch, value):
             dtype = getattr(torch, value)
         else:
-            logger.warning(f"Unsupported dtype {value}. Setting dtype = 'auto'.")
-            dtype = "auto"
+            dtype = self.default_dtype()
+            if value:
+                logger.warning(f"Unsupported dtype {value}. Setting dtype = '{dtype}'.")
         return dtype
 
     def get_model_kwargs(self):
@@ -67,7 +70,7 @@ class HFModel(BaseLM):
             return self.tokenizer
 
         model_path = self.model_path
-        logger.info(f"Loading tokenizer {model_path}...")
+        logger.log(LOG_LEVEL_FINE, f"Loading tokenizer {model_path}...")
         if "google/pegasus-x-base" in model_path:
             model_path = "google/pegasus-x-base"
 
@@ -135,7 +138,7 @@ class HFModel(BaseLM):
     ):
         # Example: max_memory = {0: "22GiB", "cpu": "30GiB"}
         if max_memory:
-            logger.info(f"Inferring device map for {max_memory}...")
+            logger.log(LOG_LEVEL_FINE, f"Inferring device map for {max_memory}...")
             with init_empty_weights():
                 model = AutoModelForCausalLM.from_pretrained(model_path)
             if tie_weights:
@@ -151,7 +154,7 @@ class HFModel(BaseLM):
                 ],
                 dtype=dtype,
             )
-        logger.info(f"Using device map: {device_map}")
+        logger.log(LOG_LEVEL_FINE, f"Using device map: {device_map}")
         return device_map
 
     def process_generation_kwargs(self, max_length=None, **generation_kwargs):
@@ -261,13 +264,16 @@ class Text2TextLM(HFModel):
         low_cpu_mem_usage=True,
         load_in_8bit=False,
         tie_weights=False,
-        dtype="auto",
+        dtype=None,
         **kwargs,
     ):
         if self.model:
             return self.model
+        
+        if dtype is None:
+            dtype = self.default_dtype()
 
-        logger.info(f"Loading model {self.model_path}...")
+        logger.log(LOG_LEVEL_FINE, f"Loading model {self.model_path}...")
         if any(
             [x in self.model_path] for x in ["google/pegasus", "google/bigbird-pegasus"]
         ):
@@ -365,7 +371,7 @@ class CausalLM(HFModel):
         if self.model:
             return self.model
 
-        logger.info(f"Loading model {self.model_path}...")
+        logger.log(LOG_LEVEL_FINE, f"Loading model {self.model_path}...")
         device_map = self.infer_device_map(
             self.model_path,
             device_map=device_map,
@@ -384,9 +390,16 @@ class CausalLM(HFModel):
         self.model = model
         return model
 
+    def load_tokenizer(self):
+        tokenizer = super().load_tokenizer()
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        return tokenizer
+
     def process_generation_kwargs(self, **generation_kwargs):
         generation_kwargs = super().process_generation_kwargs(**generation_kwargs)
         generation_kwargs["keep_generated_only"] = True
+        generation_kwargs["pad_token_id"] = self.load_tokenizer().pad_token_id
         return generation_kwargs
 
 
@@ -421,8 +434,8 @@ class InstructCausalLM(PromptBasedLM, CausalLM):
     def postprocess(self, output):
         # special newline postprocessing for some models
         if "mosaicml/mpt-7b" in self.model_path:
-            output = [s for s in re.split("[\n\s#]+$", output) if len(s)]
-            output = [re.sub("^[\n\s#]+", "", s.strip()).strip() for s in output]
+            output = [s for s in re.split(r"[\n\s#]+$", output) if len(s)]
+            output = [re.sub(r"^[\n\s#]+", "", s.strip()).strip() for s in output]
             output = "\n".join(output)
         output = super().postprocess(output)
         return output
@@ -470,13 +483,11 @@ class Llama2(InstructCausalLM):
 
     def default_max_tokens(self):
         return 4096
+    
+    def default_dtype(self):
+        return "float16"
 
-    def load_tokenizer(self):
-        tokenizer = super().load_tokenizer()
-        tokenizer.pad_token = tokenizer.eos_token
-        return tokenizer
-
-
+    
 class LlamaChat(Llama2):
     def __init__(self, model_name, **kwargs) -> None:
         super().__init__(model_name, **kwargs)
@@ -519,11 +530,6 @@ class FalconChat(InstructCausalLM):
 
     def default_max_tokens(self):
         return 2048
-
-    def load_tokenizer(self):
-        tokenizer = super().load_tokenizer()
-        tokenizer.pad_token = tokenizer.eos_token
-        return tokenizer
 
     def process_generation_kwargs(self, **generation_kwargs):
         generation_kwargs = super().process_generation_kwargs(**generation_kwargs)
