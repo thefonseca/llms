@@ -9,7 +9,6 @@ import numpy as np
 
 from .models.huggingface import (
     Text2TextLM,
-    CausalLM,
     LlamaChat,
     InstructText2TextLM,
     InstructCausalLM,
@@ -26,17 +25,18 @@ MODEL_CACHE = {}
 
 DEFAULT_MODEL_MAP = {
     r"gpt-[-\d\w]*": OpenAIChat,
-    r"facebook/opt-[\d\w]+": CausalLM,
+    r"facebook/opt-[\d\w]+": InstructCausalLM,
     r".*[cC]ode[Ll]lama-[\d\w]+-[Ii]nstruct-hf": LlamaChat,
     r".*llama-?2.*chat.*": LlamaChat,
-    r".*[Ll]lama.*": CausalLM,
+    r".*[Ll]lama.*": InstructCausalLM,
+    r".*gpt2.*": InstructCausalLM,
     r"bigscience/T0[_\d\w]*": InstructText2TextLM,
     r"google/flan-t5[-\d\w]+": InstructText2TextLM,
     r"google/long-t5[-\d\w]+": InstructText2TextLM,
     r".*alpaca.*": Alpaca,
     r".*vicuna.*": Vicuna,
-    r"mosaicml/mpt[-\d\w]$": CausalLM,
-    r"tiiuae/falcon[-\d\w]$": CausalLM,
+    r"mosaicml/mpt[-\d\w]$": InstructCausalLM,
+    r"tiiuae/falcon[-\d\w]$": InstructCausalLM,
     r"mosaicml/mpt[-\d\w]+instruct": Alpaca,
     r"tiiuae/falcon[-\d\w]+instruct": InstructCausalLM,
 }
@@ -65,19 +65,26 @@ def get_model_class(model_name, model_map=None, default_class=None):
             summarizer_class = val
             break
     else:
-        logger.warning(f"Could not match model '{model_name}' to generator class")
         if default_class:
             summarizer_class = default_class
         else:
             summarizer_class = Text2TextLM
-
+        logger.warning(
+            f"Could not match model '{model_name}' to generator class. Using {summarizer_class}."
+        )
     return summarizer_class
 
 
 def preprocess_kwargs(kwargs):
     kwargs = dict(kwargs)
-    if "model_name" not in kwargs:
+
+    if "model" in kwargs:
+        kwargs["model_name"] = kwargs.pop("model")
+    elif "model_name" not in kwargs:
         kwargs["model_name"] = os.getenv("LLM_MODEL_NAME", DEFAULT_MODEL_NAME)
+
+    if "model_path" in kwargs:
+        kwargs["model_checkpoint_path"] = kwargs.pop("model_path")
 
     if kwargs.pop("ignore_cache", False) is True:
         kwargs["cache_end"] = 0
@@ -183,10 +190,6 @@ def generate(
     if model_class is None:
         model_class = get_model_class(model_name)
 
-    if isinstance(model_class, (LlamaChat, Alpaca, Vicuna)) and "dtype" not in model_kwargs:
-        # default dtype for Llama-based models
-        model_kwargs["dtype"] = "float16"
-
     logger.log(LOG_LEVEL_FINE, f"Using model: {model_class}")
     model = model_class(model_name, **model_kwargs)
 
@@ -211,7 +214,7 @@ def generate(
         for idx, text in enumerate(sources):
             sample_kwargs = get_sample_gen_kwargs(generation_kwargs, idx)
             ignore_cache = idx < cache_start or idx >= cache_end
- 
+
             try:
                 output = model.generate(
                     text,
