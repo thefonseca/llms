@@ -429,6 +429,19 @@ class InstructCausalLM(PromptBasedLM, CausalLM):
             max_new_tokens = max_length
         generation_kwargs["max_new_tokens"] = max_new_tokens
         prompt_text = self.prompt_to_text(prompt)
+
+        guidance_scale = generation_kwargs.get("guidance_scale")
+        negative_prompt = generation_kwargs.pop("negative_prompt", None)
+        
+        if guidance_scale is not None and negative_prompt and "negative_prompt_ids" not in generation_kwargs:
+            prompt = prompt[:-1]
+            prompt += [{"role": "user", "content": negative_prompt}]
+            negative_prompt = self.prompt_to_text(prompt)
+            tokenizer = self.load_tokenizer()
+            negative_prompt_ids = tokenizer(negative_prompt, return_tensors="pt")
+            negative_prompt_ids = negative_prompt_ids.input_ids
+            generation_kwargs["negative_prompt_ids"] = negative_prompt_ids.to(0)
+        
         return prompt_text, truncated_tokens, generation_kwargs
 
     def postprocess(self, output):
