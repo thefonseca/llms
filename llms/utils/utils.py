@@ -172,6 +172,7 @@ def config_logging(
         force=True,
     )
     logging.getLogger("absl").setLevel(logging.WARNING)
+    logging.getLogger('httpx').setLevel(logging.WARNING)
     return timestr
 
 
