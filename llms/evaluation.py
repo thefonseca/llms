@@ -460,7 +460,7 @@ def evaluate_model(
             )
             logger.info(f"Evaluating {model_name} on {len(predictions)} samples...")
         else:
-            if sources:
+            if sources is not None and len(sources):
                 logger.info(f"Evaluating {model_name} on {len(sources)} samples...")
             else:
                 logger.info(f"Evaluating {model_name}...")
