@@ -13,9 +13,9 @@ from .fulltext import convert
 
 
 try:
-    nltk.data.find("tokenizers/punkt")
+    nltk.data.find("tokenizers/punkt_tab")
 except:
-    nltk.download("punkt", quiet=True)
+    nltk.download("punkt_tab", quiet=True)
 
 logger = logging.getLogger(__name__)
 LOG_LEVEL_FINE = 15
