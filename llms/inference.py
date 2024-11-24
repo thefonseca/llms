@@ -169,6 +169,7 @@ def generate(
     use_model_cache=False,
     ignore_errors=False,
     show_progress=True,
+    verbose=None,
     **kwargs,
 ):
     outputs = []
@@ -215,12 +216,15 @@ def generate(
             sample_kwargs = get_sample_gen_kwargs(generation_kwargs, idx)
             ignore_cache = idx < cache_start or idx >= cache_end
 
+            if verbose is None:
+                verbose = idx == 0
+
             try:
                 output = model.generate(
                     text,
                     max_length=max_length,
                     memoizer_ignore_cache=ignore_cache,
-                    verbose=idx == 0,
+                    verbose=verbose,
                     **sample_kwargs,
                 )
             except Exception as err:
